@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 #
 # Alist Manager Script
 #
-# Version: 1.0.5
+# Version: 1.0.6
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -148,8 +148,6 @@ download_file() {
     local retry_count=0
     local wait_time=5
     echo -e "${GREEN_COLOR}尝试下载 URL: $(printf '%q' "$url")${RES}"
-    echo -e "${GREEN_COLOR}GH_PROXY: $(printf '%q' "$GH_PROXY")${RES}"
-    echo -e "${GREEN_COLOR}GH_DOWNLOAD_URL: $(printf '%q' "$GH_DOWNLOAD_URL")${RES}"
     while [ $retry_count -lt $max_retries ]; do
         if curl -L --verbose --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
             if [ -f "$output" ] && [ -s "$output" ]; then
@@ -172,6 +170,7 @@ get_proxy() {
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
+    local proxy_input
     if [ -t 0 ]; then
         read -p "请输入代理地址或直接按回车继续: " proxy_input
     else
@@ -179,10 +178,10 @@ get_proxy() {
     fi
     if [ -n "$proxy_input" ]; then
         echo -e "${GREEN_COLOR}已使用代理地址: $proxy_input${RES}"
-        printf "%s" "$proxy_input"  # 使用 printf 避免换行符
+        printf "%s" "$proxy_input"  # 返回用户输入的代理地址
     else
         echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
-        printf ""
+        printf ""  # 返回空字符串
     fi
 }
 
@@ -190,7 +189,13 @@ INSTALL() {
     CURRENT_DIR=$(pwd)
     GH_PROXY=$(get_proxy)
     echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
-    local download_url=$(printf "%s%s/alist-linux-${ARCH}.tar.gz" "${GH_PROXY}" "${GH_DOWNLOAD_URL}")
+    local download_url
+    if [ -z "$GH_PROXY" ]; then
+        download_url="${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    else
+        download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    fi
+    echo -e "${GREEN_COLOR}构造的下载 URL: $(printf '%q' "$download_url")${RES}"
     if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         handle_error 1 "下载失败！"
     fi
@@ -283,7 +288,12 @@ UPDATE() {
     systemctl stop alist
     cp "$INSTALL_PATH/alist" /tmp/alist.bak
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
-    local download_url=$(printf "%s%s/alist-linux-${ARCH}.tar.gz" "${GH_PROXY}" "${GH_DOWNLOAD_URL}")
+    local download_url
+    if [ -z "$GH_PROXY" ]; then
+        download_url="${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    else
+        download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    fi
     if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
@@ -423,7 +433,9 @@ INSTALL_CLI() {
         return 1
     fi
     TEMP_SCRIPT=$(mktemp)
-    if ! download_file "https://raw.githubusercontent.com/guihuatu2022/alist-backup/main/v3.sh" "$TEMP_SCRIPT"; then
+    local cli_url="https://raw.githubusercontent.com/guihuatu2022/alist-backup/main/v3.sh"
+    echo -e "${GREEN_COLOR}尝试下载 CLI URL: $(printf '%q' "$cli_url")${RES}"
+    if ! download_file "$cli_url" "$TEMP_SCRIPT"; then
         echo -e "${RED_COLOR}错误：下载管理脚本失败${RES}"
         rm -f "$TEMP_SCRIPT"
         return 1
