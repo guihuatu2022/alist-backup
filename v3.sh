@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 #
 # Alist Manager Script
 #
-# Version: 1.0.6
+# Version: 1.0.7
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -165,37 +165,21 @@ download_file() {
     done
 }
 
-# 获取代理地址（统一处理）
-get_proxy() {
+INSTALL() {
+    CURRENT_DIR=$(pwd)
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    local proxy_input
-    if [ -t 0 ]; then
-        read -p "请输入代理地址或直接按回车继续: " proxy_input
-    else
-        read -p "请输入代理地址或直接按回车继续: " proxy_input </dev/tty
-    fi
-    if [ -n "$proxy_input" ]; then
-        echo -e "${GREEN_COLOR}已使用代理地址: $proxy_input${RES}"
-        printf "%s" "$proxy_input"  # 返回用户输入的代理地址
-    else
-        echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
-        printf ""  # 返回空字符串
-    fi
-}
-
-INSTALL() {
-    CURRENT_DIR=$(pwd)
-    GH_PROXY=$(get_proxy)
-    echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
+    read -p "请输入代理地址或直接按回车继续: " proxy_input
     local download_url
-    if [ -z "$GH_PROXY" ]; then
-        download_url="${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    if [ -n "$proxy_input" ]; then
+        download_url="${proxy_input}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+        echo -e "${GREEN_COLOR}已使用代理地址: $proxy_input${RES}"
     else
-        download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+        download_url="${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+        echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
     fi
-    echo -e "${GREEN_COLOR}构造的下载 URL: $(printf '%q' "$download_url")${RES}"
+    echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
     if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         handle_error 1 "下载失败！"
     fi
@@ -283,17 +267,22 @@ UPDATE() {
         handle_error 1 "未在 $INSTALL_PATH 找到 Alist"
     fi
     echo -e "${GREEN_COLOR}开始更新 Alist ...${RES}"
-    GH_PROXY=$(get_proxy)
+    echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
+    echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
+    echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
+    read -p "请输入代理地址或直接按回车继续: " proxy_input
+    local download_url
+    if [ -n "$proxy_input" ]; then
+        download_url="${proxy_input}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+        echo -e "${GREEN_COLOR}已使用代理地址: $proxy_input${RES}"
+    else
+        download_url="${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+        echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
+    fi
     echo -e "${GREEN_COLOR}停止 Alist 进程${RES}\r\n"
     systemctl stop alist
     cp "$INSTALL_PATH/alist" /tmp/alist.bak
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
-    local download_url
-    if [ -z "$GH_PROXY" ]; then
-        download_url="${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
-    else
-        download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
-    fi
     if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
