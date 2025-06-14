@@ -2,7 +2,7 @@
 
 # AList 安装脚本：从个人仓库安装，支持管理菜单、自定义路径，针对 v3.x
 # 仓库: https://github.com/guihuatu2022/alist-backup
-# 版本: 1.0.0
+# 版本: 1.0.2
 # 最后更新: 2025-06-14
 
 # 错误处理函数
@@ -143,9 +143,11 @@ INSTALL() {
         chmod +x "$INSTALL_PATH/alist"
         cd "$INSTALL_PATH"
         systemctl stop alist 2>/dev/null || true
-        ACCOUNT_INFO=$($INSTALL_PATH/alist admin random 2>&1)
-        ADMIN_USER=$(echo "$ACCOUNT_INFO" | grep "username:" | sed 's/.*username: \(.*\)/\1/')
-        ADMIN_PASS=$(echo "$ACCOUNT_INFO" | grep "password:" | sed 's/.*password: \(.*\)/\1/')
+        TEMP_LOG=$(mktemp)
+        $INSTALL_PATH/alist admin random 2>&1 | tee "$TEMP_LOG"
+        ADMIN_USER=$(sed -n 's/.*username: \(.*\)/\1/p' "$TEMP_LOG")
+        ADMIN_PASS=$(sed -n 's/.*password: \(.*\)/\1/p' "$TEMP_LOG")
+        rm -f "$TEMP_LOG"
         cd "$CURRENT_DIR"
         rm -f /tmp/alist.tar.gz
     else
@@ -261,11 +263,13 @@ RESET_PASSWORD() {
     cd "$INSTALL_PATH"
     case $choice in
         1)
-            ACCOUNT_INFO=$($INSTALL_PATH/alist admin random 2>&1)
-            ADMIN_USER=$(echo "$ACCOUNT_INFO" | grep "username:" | sed 's/.*username: \(.*\)/\1/')
-            ADMIN_PASS=$(echo "$ACCOUNT_INFO" | grep "password:" | sed 's/.*password: \(.*\)/\1/')
+            TEMP_LOG=$(mktemp)
+            $INSTALL_PATH/alist admin random 2>&1 | tee "$TEMP_LOG"
+            ADMIN_USER=$(sed -n 's/.*username: \(.*\)/\1/p' "$TEMP_LOG")
+            ADMIN_PASS=$(sed -n 's/.*password: \(.*\)/\1/p' "$TEMP_LOG")
             echo -e "${GREEN_COLOR}用户名：$ADMIN_USER${RES}"
             echo -e "${GREEN_COLOR}密码：  $ADMIN_PASS${RES}"
+            rm -f "$TEMP_LOG"
             ;;
         2)
             read -p "请输入新密码: " new_password
@@ -282,11 +286,15 @@ RESET_PASSWORD() {
 
 # 安装命令行工具
 INSTALL_CLI() {
+    # 为管道执行创建临时脚本文件
+    TEMP_SCRIPT=$(mktemp)
+    download_file "https://raw.githubusercontent.com/guihuatu2022/alist-backup/main/v3.sh" "$TEMP_SCRIPT"
     mkdir -p "$(dirname "$MANAGER_PATH")" || handle_error 1 "无法创建目录 $(dirname "$MANAGER_PATH")"
-    cp "$0" "$MANAGER_PATH" || handle_error 1 "无法复制管理脚本"
+    cp "$TEMP_SCRIPT" "$MANAGER_PATH" || handle_error 1 "无法复制管理脚本"
     chmod 755 "$MANAGER_PATH" "$(dirname "$MANAGER_PATH")" || handle_error 1 "设置权限失败"
     mkdir -p "$(dirname "$COMMAND_LINK")" || handle_error 1 "无法创建目录 $(dirname "$COMMAND_LINK")"
     ln -sf "$MANAGER_PATH" "$COMMAND_LINK" || handle_error 1 "创建命令链接失败"
+    rm -f "$TEMP_SCRIPT"
     echo -e "${GREEN_COLOR}命令行工具安装成功！使用 'alist' 打开管理菜单${RES}"
 }
 
