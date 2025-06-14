@@ -6,15 +6,15 @@
 # Version: 1.0.0
 # Last Updated: 2024-12-24
 #
-# Description: 
-#   A management script for Alist (https://alist.nn.ci)
-#   Provides installation, update, uninstallation and management functions
+# Description:
+#    A management script for Alist (https://alist.nn.ci)
+#    Provides installation, update, uninstallation and management functions
 #
 # Requirements:
-#   - Linux with systemd
-#   - Root privileges for installation
-#   - curl, tar
-#   - x86_64 or arm64 architecture
+#    - Linux with systemd
+#    - Root privileges for installation
+#    - curl, tar
+#    - x86_64 or arm64 architecture
 #
 # Author: Troray
 # Repository: https://github.com/Troray/docs
@@ -37,8 +37,8 @@ fi
 
 # 配置部分
 #######################
-# GitHub 相关配置
-GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/alist-org/alist/releases/latest/download"
+# GitHub 相关配置 - 已替换为你的项目地址
+GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
 #######################
 
 # 颜色配置
@@ -167,7 +167,7 @@ download_file() {
 
     while [ $retry_count -lt $max_retries ]; do
         if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
-            if [ -f "$output" ] && [ -s "$output" ]; then  # 检查文件是否存在且不为空
+            if [ -f "$output" ] && [ -s "$output" ]; then   # 检查文件是否存在且不为空
                 return 0
             fi
         fi
@@ -176,7 +176,7 @@ download_file() {
         if [ $retry_count -lt $max_retries ]; then
             echo -e "${YELLOW_COLOR}下载失败，${wait_time} 秒后进行第 $((retry_count + 1)) 次重试...${RES}"
             sleep $wait_time
-            wait_time=$((wait_time + 5))  # 每次重试增加等待时间
+            wait_time=$((wait_time + 5))   # 每次重试增加等待时间
         else
             echo -e "${RED_COLOR}下载失败，已重试 $max_retries 次${RES}"
             return 1
@@ -198,10 +198,11 @@ INSTALL() {
   # 如果用户输入了代理地址，则使用代理拼接下载链接
   if [ -n "$proxy_input" ]; then
     GH_PROXY="$proxy_input"
+    # 已替换为你的项目地址
     GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
     echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
   else
-    # 如果不需要代理，直接使用默认链接
+    # 如果不需要代理，直接使用默认链接 - 已替换为你的项目地址
     GH_DOWNLOAD_URL="https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
     echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
   fi
@@ -209,7 +210,7 @@ INSTALL() {
   # 下载 Alist 程序
   echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
   
-  # 使用拼接后的 GitHub 下载地址
+  # 使用拼接后的 GitHub 下载地址，文件名保持与官方一致
   if ! download_file "${GH_DOWNLOAD_URL}/alist-linux-musl-$ARCH.tar.gz" "/tmp/alist.tar.gz"; then
     echo -e "${RED_COLOR}下载失败！${RES}"
     exit 1
@@ -310,7 +311,7 @@ SUCCESS() {
   
   echo -e "\n${YELLOW_COLOR}温馨提示：如果端口无法访问，请检查服务器安全组、防火墙和服务状态${RES}"
   echo
-  exit 0  # 直接退出，不再返回菜单
+  exit 0   # 直接退出，不再返回菜单
 }
 
 UPDATE() {
@@ -330,10 +331,11 @@ UPDATE() {
     # 如果用户输入了代理地址，则使用代理拼接下载链接
     if [ -n "$proxy_input" ]; then
         GH_PROXY="$proxy_input"
+        # 已替换为你的项目地址
         GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
         echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
     else
-        # 如果不需要代理，直接使用默认链接
+        # 如果不需要代理，直接使用默认链接 - 已替换为你的项目地址
         GH_DOWNLOAD_URL="https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
         echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
     fi
@@ -345,7 +347,7 @@ UPDATE() {
     # 备份二件
     cp $INSTALL_PATH/alist /tmp/alist.bak
 
-    # 下载新版本
+    # 下载新版本，文件名保持与官方一致
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
     if ! download_file "${GH_DOWNLOAD_URL}/alist-linux-musl-$ARCH.tar.gz" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
@@ -472,8 +474,8 @@ RESET_PASSWORD() {
 }
 
 # 在文件开头添加管理脚本路径配置
-MANAGER_PATH="/usr/local/sbin/alist-manager"  # 管理脚本存放路径
-COMMAND_LINK="/usr/local/bin/alist"          # 命令软链接路径
+MANAGER_PATH="/usr/local/sbin/alist-manager"   # 管理脚本存放路径
+COMMAND_LINK="/usr/local/bin/alist"            # 命令软链接路径
 
 # 修改 INSTALL_CLI() 函数
 INSTALL_CLI() {
@@ -537,7 +539,7 @@ INSTALL_CLI() {
     
     echo -e "${GREEN_COLOR}命令行工具安装成功！${RES}"
     echo -e "\n现在你可以使用以下命令："
-    echo -e "1. ${GREEN_COLOR}alist${RES}          - 快捷命令"
+    echo -e "1. ${GREEN_COLOR}alist${RES}      - 快捷命令"
     echo -e "2. ${GREEN_COLOR}alist-manager${RES}  - 完整命令"
     return 0
 }
@@ -668,8 +670,8 @@ elif [ "$1" = "uninstall" ]; then
   UNINSTALL
 else
   echo -e "${RED_COLOR}错误的命令${RES}"
-  echo -e "用法: $0 install [安装路径]    # 安装 Alist"
-  echo -e "     $0 update              # 更新 Alist"
-  echo -e "     $0 uninstall          # 卸载 Alist"
-  echo -e "     $0                    # 显示交互菜单"
+  echo -e "用法: $0 install [安装路径]      # 安装 Alist"
+  echo -e "     $0 update                 # 更新 Alist"
+  echo -e "     $0 uninstall              # 卸载 Alist"
+  echo -e "     $0                        # 显示交互菜单"
 fi
