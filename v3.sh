@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 #
 # Alist Manager Script
 #
-# Version: 1.1.0
+# Version: 1.1.1
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -200,8 +200,8 @@ INSTALL() {
         systemctl stop alist 2>/dev/null || true
         TEMP_LOG=$(mktemp)
         ./alist admin random >"$TEMP_LOG" 2>/dev/null
-        ADMIN_USER=$(grep "username:" "$TEMP_LOG" | sed 's/.*username: \(.*\)/\1/')
-        ADMIN_PASS=$(grep "password:" "$TEMP_LOG" | sed 's/.*password: \(.*\)/\1/')
+        ADMIN_USER=$(cat "$TEMP_LOG" | grep "username:" | awk '{print $2}')
+        ADMIN_PASS=$(cat "$TEMP_LOG" | grep "password:" | awk '{print $2}')
         rm -f "$TEMP_LOG"
         cd "$CURRENT_DIR"
     else
@@ -398,8 +398,8 @@ RESET_PASSWORD() {
                 exit 1
             fi
             if [ -s "$TEMP_LOG" ]; then
-                ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://' | head -n 1)
-                ADMIN_PASS=$(grep -o "password:[^ ]*" "$TEMP_LOG" | sed 's/password://' | head -n 1)
+                ADMIN_USER=$(cat "$TEMP_LOG" | grep "username:" | awk '{print $2}')
+                ADMIN_PASS=$(cat "$TEMP_LOG" | grep "password:" | awk '{print $2}')
                 if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASS" ]; then
                     echo "账号: $ADMIN_USER"
                     echo "密码: $ADMIN_PASS"
@@ -436,7 +436,7 @@ RESET_PASSWORD() {
                 systemctl start alist
                 exit 1
             fi
-            ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://' | head -n 1)
+            ADMIN_USER=$(cat "$TEMP_LOG" | grep "username:" | awk '{print $2}')
             if [ -n "$ADMIN_USER" ]; then
                 echo "账号: $ADMIN_USER"
                 echo "密码: $new_password"
