@@ -158,6 +158,7 @@ case "$1" in
         ;;
 esac
 EOF
+    chmod +x "$SCRIPT_PATH"
 
     # 验证脚本完整性
     echo "验证 $SCRIPT_PATH 完整性："
@@ -190,24 +191,6 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
     systemctl enable alist
-
-    # 生成并显示初始管理员账号密码
-    echo "生成初始管理员账号密码..."
-    systemctl stop alist 2>/dev/null || true
-    TEMP_LOG=$(mktemp)
-    "$INSTALL_DIR/alist" admin random 2>&1 | tee "$TEMP_LOG"
-    echo -e "\e[32m"
-    echo "初始管理员账号信息："
-    sed -n 's/.*username: \(.*\)/username: \1/p; s/.*password: \(.*\)/password: \1/p' "$TEMP_LOG" | while read -r line; do
-        echo "$line"
-    done
-    if [ ! -s "$TEMP_LOG" ] || ! grep -q "username" "$TEMP_LOG"; then
-        echo "未找到账号密码信息，请手动运行 'alist admin random'"
-    fi
-    echo -e "\e[0m"
-    rm -f "$TEMP_LOG"
-
-    # 启动服务
     systemctl start alist
     echo "AList 安装完成，已配置开机自启！"
 }
