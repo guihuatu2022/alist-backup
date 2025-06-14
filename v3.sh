@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 #
 # Alist Manager Script
 #
-# Version: 1.0.8
+# Version: 1.0.9
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -147,9 +147,9 @@ download_file() {
     local max_retries=3
     local retry_count=0
     local wait_time=5
-    echo -e "${GREEN_COLOR}尝试下载 URL: $(printf '%q' "$url")${RES}"
+    echo -e "${GREEN_COLOR}尝试下载 Alist...${RES}"
     while [ $retry_count -lt $max_retries ]; do
-        if curl -L --verbose --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
+        if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
             if [ -f "$output" ] && [ -s "$output" ]; then
                 return 0
             fi
@@ -387,7 +387,18 @@ RESET_PASSWORD() {
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
             TEMP_LOG=$(mktemp)
             ./alist admin random >"$TEMP_LOG" 2>/dev/null
-            grep -E "username:|password:" "$TEMP_LOG" | sed 's/.*username:/账号: /; s/.*password:/密码: /'
+            if [ -s "$TEMP_LOG" ]; then
+                ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://')
+                ADMIN_PASS=$(grep -o "password:[^ ]*" "$TEMP_LOG" | sed 's/password://')
+                if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASS" ]; then
+                    echo "账号: $ADMIN_USER"
+                    echo "密码: $ADMIN_PASS"
+                else
+                    echo -e "${YELLOW_COLOR}警告：未能正确解析账号密码，请检查 Alist 输出${RES}"
+                fi
+            else
+                echo -e "${YELLOW_COLOR}警告：Alist 未返回有效输出${RES}"
+            fi
             rm -f "$TEMP_LOG"
             systemctl start alist
             exit 0
@@ -407,8 +418,14 @@ RESET_PASSWORD() {
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
             TEMP_LOG=$(mktemp)
             ./alist admin set "$new_password" >"$TEMP_LOG" 2>/dev/null
-            grep "username:" "$TEMP_LOG" | sed 's/.*username:/账号: /'
-            echo "密码: $new_password"
+            ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://')
+            if [ -n "$ADMIN_USER" ]; then
+                echo "账号: $ADMIN_USER"
+                echo "密码: $new_password"
+            else
+                echo -e "${YELLOW_COLOR}警告：未能正确解析账号，请检查 Alist 输出${RES}"
+                echo "密码: $new_password"
+            fi
             rm -f "$TEMP_LOG"
             systemctl start alist
             exit 0
@@ -435,7 +452,7 @@ INSTALL_CLI() {
     fi
     TEMP_SCRIPT=$(mktemp)
     local cli_url="https://raw.githubusercontent.com/guihuatu2022/alist-backup/main/v3.sh"
-    echo -e "${GREEN_COLOR}尝试下载 CLI URL: $(printf '%q' "$cli_url")${RES}"
+    echo -e "${GREEN_COLOR}尝试下载 CLI ...${RES}"
     if ! download_file "$cli_url" "$TEMP_SCRIPT"; then
         echo -e "${RED_COLOR}错误：下载管理脚本失败${RES}"
         rm -f "$TEMP_SCRIPT"
