@@ -1,10 +1,12 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
 ###############################################################################
 #
 # Alist Manager Script
 #
-# Version: 1.0.4
+# Version: 1.0.5
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -145,9 +147,11 @@ download_file() {
     local max_retries=3
     local retry_count=0
     local wait_time=5
-    echo -e "${GREEN_COLOR}尝试下载 URL: $url${RES}"
+    echo -e "${GREEN_COLOR}尝试下载 URL: $(printf '%q' "$url")${RES}"
+    echo -e "${GREEN_COLOR}GH_PROXY: $(printf '%q' "$GH_PROXY")${RES}"
+    echo -e "${GREEN_COLOR}GH_DOWNLOAD_URL: $(printf '%q' "$GH_DOWNLOAD_URL")${RES}"
     while [ $retry_count -lt $max_retries ]; do
-        if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
+        if curl -L --verbose --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
             if [ -f "$output" ] && [ -s "$output" ]; then
                 return 0
             fi
@@ -175,10 +179,10 @@ get_proxy() {
     fi
     if [ -n "$proxy_input" ]; then
         echo -e "${GREEN_COLOR}已使用代理地址: $proxy_input${RES}"
-        echo "$proxy_input"
+        printf "%s" "$proxy_input"  # 使用 printf 避免换行符
     else
         echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
-        echo ""
+        printf ""
     fi
 }
 
@@ -186,7 +190,7 @@ INSTALL() {
     CURRENT_DIR=$(pwd)
     GH_PROXY=$(get_proxy)
     echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
-    local download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    local download_url=$(printf "%s%s/alist-linux-${ARCH}.tar.gz" "${GH_PROXY}" "${GH_DOWNLOAD_URL}")
     if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         handle_error 1 "下载失败！"
     fi
@@ -279,7 +283,7 @@ UPDATE() {
     systemctl stop alist
     cp "$INSTALL_PATH/alist" /tmp/alist.bak
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
-    local download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    local download_url=$(printf "%s%s/alist-linux-${ARCH}.tar.gz" "${GH_PROXY}" "${GH_DOWNLOAD_URL}")
     if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
