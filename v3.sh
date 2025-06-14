@@ -123,4 +123,124 @@ manage_menu() {
                     *) echo "无效选项";;
                 esac
                 # 重启服务
-                systemctl start al
+                systemctl start alist
+                ;;
+            7) uninstall_alist;;
+            0) exit 0;;
+            *) echo "无效选项";;
+        esac
+    done
+}
+
+# 主逻辑
+case "$1" in
+    install)
+        echo "请使用 curl -fsSL https://raw.githubusercontent.com/guihuatu2022/alist-backup/refs/heads/main/v3.sh | bash -s install"
+        exit 1
+        ;;
+    uninstall)
+        uninstall_alist
+        ;;
+    server)
+        "$INSTALL_DIR/alist" server
+        ;;
+    admin)
+        systemctl stop alist 2>/dev/null || true
+        "$INSTALL_DIR/alist" admin
+        systemctl start alist
+        ;;
+    "")
+        manage_menu
+        ;;
+    *)
+        echo "使用方法: $0 {install|uninstall|server|admin}"
+        exit 1
+        ;;
+esac
+EOF
+
+    # 验证脚本完整性
+    echo "验证 $SCRIPT_PATH 完整性："
+    if [ -s "$SCRIPT_PATH" ] && grep -q "manage_menu" "$SCRIPT_PATH"; then
+        echo "$SCRIPT_PATH 已正确写入"
+    else
+        echo "错误：$SCRIPT_PATH 写入失败或不完整"
+        exit 1
+    fi
+
+    # 创建符号链接指向脚本
+    ln -sf "$SCRIPT_PATH" /usr/local/bin/alist
+
+    # 验证符号链接
+    echo "验证符号链接："
+    ls -l /usr/local/bin/alist
+
+    # 配置 systemd 服务（开机自启和守护进程）
+    cat > /etc/systemd/system/alist.service << EOF
+[Unit]
+Description=AList File Server
+After=network.target
+[Service]
+Type=simple
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/alist server
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable alist
+
+    # 生成并显示初始管理员账号密码
+    echo "生成初始管理员账号密码..."
+    systemctl stop alist 2>/dev/null || true
+    TEMP_LOG=$(mktemp)
+    "$INSTALL_DIR/alist" admin random 2>&1 | tee "$TEMP_LOG"
+    echo -e "\e[32m"
+    echo "初始管理员账号信息："
+    sed -n 's/.*username: \(.*\)/username: \1/p; s/.*password: \(.*\)/password: \1/p' "$TEMP_LOG" | while read -r line; do
+        echo "$line"
+    done
+    if [ ! -s "$TEMP_LOG" ] || ! grep -q "username" "$TEMP_LOG"; then
+        echo "未找到账号密码信息，请手动运行 'alist admin random'"
+    fi
+    echo -e "\e[0m"
+    rm -f "$TEMP_LOG"
+
+    # 启动服务
+    systemctl start alist
+    echo "AList 安装完成，已配置开机自启！"
+}
+
+# 卸载 AList
+uninstall_alist() {
+    systemctl stop alist 2>/dev/null || true
+    systemctl disable alist 2>/dev/null || true
+    rm -f /etc/systemd/system/alist.service
+    systemctl daemon-reload
+    rm -rf "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR/data"
+    rm -f /usr/local/bin/alist "$SCRIPT_PATH"
+    echo "AList 已卸载！"
+}
+
+# 主逻辑
+case "$1" in
+    install)
+        install_deps
+        install_alist
+        ;;
+    uninstall)
+        uninstall_alist
+        ;;
+    server)
+        [ -f "$INSTALL_DIR/alist" ] && "$INSTALL_DIR/alist" server || { echo "AList 未安装"; exit 1; }
+        ;;
+    admin)
+        [ -f "$INSTALL_DIR/alist" ] && { systemctl stop alist 2>/dev/null || true; "$INSTALL_DIR/alist" admin; systemctl start alist; } || { echo "AList 未安装"; exit 1; }
+        ;;
+    *)
+        echo "使用方法: $0 {install|uninstall|server|admin}"
+        exit 1
+        ;;
+esac
