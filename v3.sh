@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 #
 # Alist Manager Script
 #
-# Version: 1.0.7
+# Version: 1.0.8
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -74,7 +74,7 @@ else
         INSTALL_PATH="$INSTALL_PATH/alist"
     fi
     parent_dir=$(dirname "$INSTALL_PATH")
-    if [ ! -d "$parent_dir" ]; then
+    if [ -n "$parent_dir" ] && [ ! -d "$parent_dir" ]; then
         mkdir -p "$parent_dir" || handle_error 1 "无法创建目录 $parent_dir"
     fi
     if ! [ -w "$parent_dir" ]; then
@@ -170,7 +170,13 @@ INSTALL() {
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
+    local proxy_input
+    if [ -t 0 ]; then
+        read -p "请输入代理地址或直接按回车继续: " proxy_input
+    else
+        read -p "请输入代理地址或直接按回车继续: " proxy_input </dev/tty
+    fi
+    sleep 1  # 短暂延迟，确保用户有时间输入
     local download_url
     if [ -n "$proxy_input" ]; then
         download_url="${proxy_input}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
@@ -270,7 +276,13 @@ UPDATE() {
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
+    local proxy_input
+    if [ -t 0 ]; then
+        read -p "请输入代理地址或直接按回车继续: " proxy_input
+    else
+        read -p "请输入代理地址或直接按回车继续: " proxy_input </dev/tty
+    fi
+    sleep 1  # 短暂延迟，确保用户有时间输入
     local download_url
     if [ -n "$proxy_input" ]; then
         download_url="${proxy_input}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
