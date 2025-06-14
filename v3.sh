@@ -3,7 +3,7 @@
 #
 # Alist Manager Script
 #
-# Version: 1.0.2
+# Version: 1.0.3
 # Last Updated: 2025-06-14
 #
 # Description: 
