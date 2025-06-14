@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AList 安装脚本：支持 install、uninstall，默认路径 /opt/alist，配置开机自启和守护进程
+# AList 安装脚本：支持 install、uninstall，默认路径 /opt/alist，配置开机自启和守护进程，针对 v3.45
 
 # 检查 root 权限
 [ "$(id -u)" != "0" ] && { echo "需要 root 权限，请使用 sudo"; exit 1; }
@@ -62,7 +62,7 @@ install_alist() {
     cat > "$SCRIPT_PATH" << 'EOF'
 #!/bin/bash
 
-# AList 管理脚本：支持 server、admin、管理菜单，默认路径 /opt/alist
+# AList 管理脚本：支持 server、admin、管理菜单，默认路径 /opt/alist，针对 v3.45
 
 # 检查 root 权限
 [ "$(id -u)" != "0" ] && { echo "需要 root 权限，请使用 sudo"; exit 1; }
@@ -85,17 +85,15 @@ manage_menu() {
             5) journalctl -u alist -b;;
             6)
                 echo "选择重置密码方式："
-                echo "1. 随机生成密码（适用于 v3.25.0 及以上）"
-                echo "2. 手动设置密码（适用于 v3.25.0 及以上）"
-                echo "3. 显示管理员信息（适用于 v3.25.0 以下）"
-                read -p "选择 [1-3]: " pwd_choice
+                echo "1. 随机生成密码"
+                echo "2. 手动设置密码"
+                read -p "选择 [1-2]: " pwd_choice
                 case $pwd_choice in
                     1) "$INSTALL_DIR/alist" admin random;;
                     2)
                         read -p "请输入新密码: " new_password
                         "$INSTALL_DIR/alist" admin set "$new_password"
                         ;;
-                    3) "$INSTALL_DIR/alist" admin;;
                     *) echo "无效选项";;
                 esac
                 ;;
@@ -117,6 +115,7 @@ case "$1" in
         rm -f /etc/systemd/system/alist.service
         systemctl daemon-reload
         rm -rf "$INSTALL_DIR"
+        rm -rf "$INSTALL_DIR/data"
         rm -f /usr/local/bin/alist "$SCRIPT_PATH"
         echo "AList 已卸载！"
         ;;
@@ -136,6 +135,15 @@ case "$1" in
 esac
 EOF
     chmod +x "$SCRIPT_PATH"
+
+    # 验证脚本完整性
+    echo "验证 $SCRIPT_PATH 完整性："
+    if [ -s "$SCRIPT_PATH" ] && grep -q "manage_menu" "$SCRIPT_PATH"; then
+        echo "$SCRIPT_PATH 已正确写入"
+    else
+        echo "错误：$SCRIPT_PATH 写入失败或不完整"
+        exit 1
+    fi
 
     # 创建符号链接指向脚本
     ln -sf "$SCRIPT_PATH" /usr/local/bin/alist
@@ -170,6 +178,7 @@ uninstall_alist() {
     rm -f /etc/systemd/system/alist.service
     systemctl daemon-reload
     rm -rf "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR/data"
     rm -f /usr/local/bin/alist "$SCRIPT_PATH"
     echo "AList 已卸载！"
 }
