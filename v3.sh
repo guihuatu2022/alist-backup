@@ -88,6 +88,8 @@ manage_menu() {
                 echo "1. 随机生成密码"
                 echo "2. 手动设置密码"
                 read -p "选择 [1-2]: " pwd_choice
+                # 停止服务以避免 token 错误
+                systemctl stop alist 2>/dev/null || true
                 case $pwd_choice in
                     1) "$INSTALL_DIR/alist" admin random;;
                     2)
@@ -96,6 +98,8 @@ manage_menu() {
                         ;;
                     *) echo "无效选项";;
                 esac
+                # 重启服务
+                systemctl start alist
                 ;;
             7) exit 0;;
             *) echo "无效选项";;
@@ -123,7 +127,9 @@ case "$1" in
         "$INSTALL_DIR/alist" server
         ;;
     admin)
+        systemctl stop alist 2>/dev/null || true
         "$INSTALL_DIR/alist" admin
+        systemctl start alist
         ;;
     "")
         manage_menu
@@ -196,7 +202,7 @@ case "$1" in
         [ -f "$INSTALL_DIR/alist" ] && "$INSTALL_DIR/alist" server || { echo "AList 未安装"; exit 1; }
         ;;
     admin)
-        [ -f "$INSTALL_DIR/alist" ] && "$INSTALL_DIR/alist" admin || { echo "AList 未安装"; exit 1; }
+        [ -f "$INSTALL_DIR/alist" ] && { systemctl stop alist 2>/dev/null || true; "$INSTALL_DIR/alist" admin; systemctl start alist; } || { echo "AList 未安装"; exit 1; }
         ;;
     *)
         echo "使用方法: $0 {install|uninstall|server|admin}"
