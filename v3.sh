@@ -7,6 +7,7 @@
 
 # 默认安装路径
 INSTALL_DIR="/opt/alist"
+SCRIPT_PATH="/usr/local/bin/v3.sh"
 
 # 检测 CPU 架构
 ARCH=$(uname -m)
@@ -25,7 +26,7 @@ else
 fi
 
 # GitHub 仓库地址
-REPO_URL="https://github.com/guihuatu2022/alist-backup/releases/latest/download"
+REPO_URL="https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
 BINARY_PREFIX="alist-linux-${ARCH_TYPE}.tar.gz"
 
 # 安装依赖
@@ -53,8 +54,10 @@ install_alist() {
     chmod +x "$INSTALL_DIR/alist"
     rm /tmp/${BINARY_PREFIX}
 
-    # 创建符号链接
-    ln -sf "$INSTALL_DIR/alist" /usr/local/bin/alist
+    # 创建符号链接指向脚本本身
+    cp "$0" "$SCRIPT_PATH"
+    chmod +x "$SCRIPT_PATH"
+    ln -sf "$SCRIPT_PATH" /usr/local/bin/alist
 
     # 配置 systemd 服务（开机自启和守护进程）
     cat > /etc/systemd/system/alist.service << EOF
@@ -83,7 +86,7 @@ uninstall_alist() {
     rm -f /etc/systemd/system/alist.service
     systemctl daemon-reload
     rm -rf "$INSTALL_DIR"
-    rm -f /usr/local/bin/alist
+    rm -f /usr/local/bin/alist "$SCRIPT_PATH"
     echo "AList 已卸载！"
 }
 
