@@ -199,16 +199,7 @@ EOF
     "$INSTALL_DIR/alist" admin random 2>&1 | tee "$TEMP_LOG"
     echo -e "\e[32m"
     echo "初始管理员账号信息："
-    awk '/username:/ {print $NF} /password:/ {print $NF}' "$TEMP_LOG" | while read -r line; do
-        if [ "$line" == "admin" ]; then
-            echo "username: $line"
-        else
-            echo "password: $line"
-        fi
-    done
-    if [ ! -s "$TEMP_LOG" ] || ! grep -q "username" "$TEMP_LOG"; then
-        echo "未找到账号密码信息，请手动运行 'alist admin random'"
-    fi
+    grep -E "username|password" "$TEMP_LOG" || echo "未找到账号密码信息，请手动运行 'alist admin random'"
     echo -e "\e[0m"
     rm -f "$TEMP_LOG"
 
