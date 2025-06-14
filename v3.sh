@@ -70,13 +70,35 @@ install_alist() {
 # 默认安装路径
 INSTALL_DIR="/opt/alist"
 
+# 卸载 AList
+uninstall_alist() {
+    systemctl stop alist 2>/dev/null || true
+    systemctl disable alist 2>/dev/null || true
+    rm -f /etc/systemd/system/alist.service
+    systemctl daemon-reload
+    rm -rf "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR/data"
+    rm -f /usr/local/bin/alist "$SCRIPT_PATH"
+    echo "AList 已卸载！"
+    exit 0
+}
+
 # 管理菜单
 manage_menu() {
     [ ! -f "$INSTALL_DIR/alist" ] && { echo "AList 未安装，请先运行 install"; exit 1; }
     while true; do
-        echo -e "\nAList 管理菜单"
-        echo "1. 启动  2. 停止  3. 重启  4. 状态  5. 日志  6. 重置密码  7. 退出"
-        read -p "选择 [1-7]: " choice
+        echo -e "\e[32m"
+        echo "AList 管理菜单"
+        echo "1. 启动"
+        echo "2. 停止"
+        echo "3. 重启"
+        echo "4. 状态"
+        echo "5. 日志"
+        echo "6. 重置密码"
+        echo "7. 卸载"
+        echo "0. 退出"
+        echo -e "\e[0m"
+        read -p "选择 [0-7]: " choice
         case $choice in
             1) systemctl start alist; echo "已启动";;
             2) systemctl stop alist; echo "已停止";;
@@ -84,9 +106,11 @@ manage_menu() {
             4) systemctl status alist;;
             5) journalctl -u alist -b;;
             6)
+                echo -e "\e[32m"
                 echo "选择重置密码方式："
                 echo "1. 随机生成密码"
                 echo "2. 手动设置密码"
+                echo -e "\e[0m"
                 read -p "选择 [1-2]: " pwd_choice
                 # 停止服务以避免 token 错误
                 systemctl stop alist 2>/dev/null || true
@@ -101,7 +125,8 @@ manage_menu() {
                 # 重启服务
                 systemctl start alist
                 ;;
-            7) exit 0;;
+            7) uninstall_alist;;
+            0) exit 0;;
             *) echo "无效选项";;
         esac
     done
@@ -114,14 +139,7 @@ case "$1" in
         exit 1
         ;;
     uninstall)
-        systemctl stop alist 2>/dev/null || true
-        systemctl disable alist 2>/dev/null || true
-        rm -f /etc/systemd/system/alist.service
-        systemctl daemon-reload
-        rm -rf "$INSTALL_DIR"
-        rm -rf "$INSTALL_DIR/data"
-        rm -f /usr/local/bin/alist "$SCRIPT_PATH"
-        echo "AList 已卸载！"
+        uninstall_alist
         ;;
     server)
         "$INSTALL_DIR/alist" server
