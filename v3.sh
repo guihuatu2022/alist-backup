@@ -6,7 +6,7 @@ export LANG=en_US.UTF-8
 #
 # Alist Manager Script
 #
-# Version: 1.0.9
+# Version: 1.1.0
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -379,27 +379,39 @@ RESET_PASSWORD() {
     else
         read -p "请输入选项 [0-2]: " choice </dev/tty
     fi
-    cd "$INSTALL_PATH"
-    systemctl stop alist >/dev/null 2>&1
+    cd "$INSTALL_PATH" || handle_error 1 "无法进入安装目录 $INSTALL_PATH"
+    echo -e "${GREEN_COLOR}停止 Alist 服务...${RES}"
+    systemctl stop alist 2>/dev/null || {
+        echo -e "${YELLOW_COLOR}警告：停止服务可能失败，尝试强制停止进程${RES}"
+        pkill -f alist 2>/dev/null || true
+    }
     case "$choice" in
         1)
             echo -e "${GREEN_COLOR}正在生成随机密码...${RES}"
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
             TEMP_LOG=$(mktemp)
-            ./alist admin random >"$TEMP_LOG" 2>/dev/null
+            if ! ./alist admin random >"$TEMP_LOG" 2>"$TEMP_LOG.err"; then
+                echo -e "${RED_COLOR}错误：执行 alist admin random 失败${RES}"
+                cat "$TEMP_LOG.err" >&2
+                rm -f "$TEMP_LOG" "$TEMP_LOG.err"
+                systemctl start alist
+                exit 1
+            fi
             if [ -s "$TEMP_LOG" ]; then
-                ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://')
-                ADMIN_PASS=$(grep -o "password:[^ ]*" "$TEMP_LOG" | sed 's/password://')
+                ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://' | head -n 1)
+                ADMIN_PASS=$(grep -o "password:[^ ]*" "$TEMP_LOG" | sed 's/password://' | head -n 1)
                 if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASS" ]; then
                     echo "账号: $ADMIN_USER"
                     echo "密码: $ADMIN_PASS"
                 else
-                    echo -e "${YELLOW_COLOR}警告：未能正确解析账号密码，请检查 Alist 输出${RES}"
+                    echo -e "${YELLOW_COLOR}警告：未能正确解析账号密码，请检查以下输出：${RES}"
+                    cat "$TEMP_LOG"
                 fi
             else
-                echo -e "${YELLOW_COLOR}警告：Alist 未返回有效输出${RES}"
+                echo -e "${YELLOW_COLOR}警告：Alist 未返回有效输出，检查以下错误：${RES}"
+                cat "$TEMP_LOG.err" >&2
             fi
-            rm -f "$TEMP_LOG"
+            rm -f "$TEMP_LOG" "$TEMP_LOG.err"
             systemctl start alist
             exit 0
             ;;
@@ -417,16 +429,23 @@ RESET_PASSWORD() {
             echo -e "${GREEN_COLOR}正在设置新密码...${RES}"
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
             TEMP_LOG=$(mktemp)
-            ./alist admin set "$new_password" >"$TEMP_LOG" 2>/dev/null
-            ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://')
+            if ! ./alist admin set "$new_password" >"$TEMP_LOG" 2>"$TEMP_LOG.err"; then
+                echo -e "${RED_COLOR}错误：执行 alist admin set 失败${RES}"
+                cat "$TEMP_LOG.err" >&2
+                rm -f "$TEMP_LOG" "$TEMP_LOG.err"
+                systemctl start alist
+                exit 1
+            fi
+            ADMIN_USER=$(grep -o "username:[^ ]*" "$TEMP_LOG" | sed 's/username://' | head -n 1)
             if [ -n "$ADMIN_USER" ]; then
                 echo "账号: $ADMIN_USER"
                 echo "密码: $new_password"
             else
-                echo -e "${YELLOW_COLOR}警告：未能正确解析账号，请检查 Alist 输出${RES}"
+                echo -e "${YELLOW_COLOR}警告：未能正确解析账号，请检查以下输出：${RES}"
+                cat "$TEMP_LOG"
                 echo "密码: $new_password"
             fi
-            rm -f "$TEMP_LOG"
+            rm -f "$TEMP_LOG" "$TEMP_LOG.err"
             systemctl start alist
             exit 0
             ;;
