@@ -191,6 +191,17 @@ WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
     systemctl enable alist
+
+    # 生成并显示初始管理员账号密码
+    echo "生成初始管理员账号密码..."
+    systemctl stop alist 2>/dev/null || true
+    ADMIN_OUTPUT=$("$INSTALL_DIR/alist" admin random 2>&1)
+    echo -e "\e[32m"
+    echo "初始管理员账号信息："
+    echo "$ADMIN_OUTPUT" | grep -E "username|password"
+    echo -e "\e[0m"
+
+    # 启动服务
     systemctl start alist
     echo "AList 安装完成，已配置开机自启！"
 }
