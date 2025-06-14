@@ -3,8 +3,8 @@
 #
 # Alist Manager Script
 #
-# Version: 1.0.0
-# Last Updated: 2025-06-14
+# Version: 1.0.1
+# Last Updated: 2025-06-15
 #
 # Description: 
 #   A management script for Alist (https://alist.nn.ci)
@@ -170,19 +170,24 @@ download_file() {
     return 1
 }
 
-INSTALL() {
-    CURRENT_DIR=$(pwd)
+# 获取代理地址（统一处理）
+get_proxy() {
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
+    read -p "请输入代理地址或直接按回车继续: " proxy_input </dev/tty
     if [ -n "$proxy_input" ]; then
-        GH_PROXY="$proxy_input"
-        echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
+        echo -e "${GREEN_COLOR}已使用代理地址: $proxy_input${RES}"
+        echo "$proxy_input"
     else
-        GH_PROXY=""
         echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
+        echo ""
     fi
+}
+
+INSTALL() {
+    CURRENT_DIR=$(pwd)
+    GH_PROXY=$(get_proxy)
     echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
     if ! download_file "${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败！${RES}"
@@ -199,7 +204,7 @@ INSTALL() {
         chmod +x alist
         systemctl stop alist 2>/dev/null || true
         TEMP_LOG=$(mktemp)
-        ./alist admin random 2>&1 | tee "$TEMP_LOG"
+        ./alist admin random >"$TEMP_LOG" 2>&1
         ADMIN_USER=$(sed -n 's/.*username: \(.*\)/\1/p' "$TEMP_LOG")
         ADMIN_PASS=$(sed -n 's/.*password: \(.*\)/\1/p' "$TEMP_LOG")
         rm -f "$TEMP_LOG"
@@ -215,24 +220,26 @@ INSTALL() {
 
 INIT() {
     if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}出错了${RES}，当前系统未安装 Alist\r\n"
+        echo -e \r\n${RED_COLOR}出错了${RES}，当前系统未安装 Alist\r\n"
         exit 1
-    fi
-    cat >/etc/systemd/system/alist.service <<EOF
+    }
+    cat >/etc/systemd/system/alist@.service <<EOF
 [Unit]
 Description=Alist service
 Wants=network.target
 After=network.target network.service
+
 [Service]
 Type=simple
 WorkingDirectory=$INSTALL_PATH
 ExecStart=$INSTALL_PATH/alist server
 KillMode=process
+
 [Install]
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable alist >/dev/null 2>&1
+    systemctl enable alist@.service >/dev/null 2>&1
 }
 
 SUCCESS() {
@@ -242,14 +249,14 @@ SUCCESS() {
         local width=51
         printf "│ %-${width}s │\n" "$text"
     }
-    LOCAL_IP=$(ip addr show | grep -w inet | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -n1)
+    LOCAL_IP=$(ip addr show | grep -w inet | grep -v "127.*1" | awk '{print $2}' | cut -d'/' -f1 | head -n 1)
     PUBLIC_IP=$(curl -s4 ip.sb || curl -s4 ifconfig.me || echo "获取失败")
     echo -e "┌────────────────────────────────────────────────────┐"
     print_line "Alist 安装成功！"
     print_line ""
     print_line "访问地址："
     print_line "  局域网：http://${LOCAL_IP}:5244/"
-    print_line "  公网：  http://${PUBLIC_IP}:5244/"
+    print_line "  公网：  http://${PUBLIC_IP'}:5244/"
     print_line "配置文件：$INSTALL_PATH/data/config.json"
     print_line ""
     if [ ! -z "$ADMIN_USER" ] && [ ! -z "$ADMIN_PASS" ]; then
@@ -262,7 +269,7 @@ SUCCESS() {
         echo -e "${YELLOW_COLOR}警告：命令行工具安装失败，但不影响 Alist 的使用${RES}"
     fi
     echo -e "\n${GREEN_COLOR}启动服务中...${RES}"
-    systemctl restart alist
+    systemctl restart alist@
     echo -e "管理: 在任意目录输入 ${GREEN_COLOR}alist${RES} 打开管理菜单"
     echo -e "\n${YELLOW_COLOR}温馨提示：如果端口无法访问，请检查服务器安全组、防火墙和服务状态${RES}"
     echo
@@ -271,37 +278,27 @@ SUCCESS() {
 
 UPDATE() {
     if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：未在 $INSTALL_PATH 找到 Alist${RES}\r\n"
+        echo -e "\r\n${RED_COLOR}错误${RES}：未在 $INSTALL_PATH 找到 Alist${RES}\r\n"
         exit 1
     fi
     echo -e "${GREEN_COLOR}开始更新 Alist ...${RES}"
-    echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
-    echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
-    echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
-    if [ -n "$proxy_input" ]; then
-        GH_PROXY="$proxy_input"
-        echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
-    else
-        GH_PROXY=""
-        echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
-    fi
+    GH_PROXY=$(get_proxy)
     echo -e "${GREEN_COLOR}停止 Alist 进程${RES}\r\n"
-    systemctl stop alist
+    systemctl stop alist@
     cp $INSTALL_PATH/alist /tmp/alist.bak
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
-    if ! download_file "${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz" "/tmp/alist.tar.gz"; then
+    if ! download_file "${GH_PROXY}${GH_DOWN_URL}/alist-linux-${ARCH}.tar.gz" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/alist.bak $INSTALL_PATH/alist
-        systemctl start alist
+        systemctl start alist@
         exit 1
     fi
     if ! tar zxf /tmp/alist.tar.gz -C $INSTALL_PATH/; then
         echo -e "${RED_COLOR}解压失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        mv /tmp/alist.bak $INSTALL_PATH/alist
-        systemctl start alist
+        mv /tmp"/alist.bak $INSTALL_PATH/alist
+        systemctl start alist@
         rm -f /tmp/alist.tar.gz
         exit 1
     fi
@@ -312,14 +309,14 @@ UPDATE() {
         echo -e "${RED_COLOR}更新失败！${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/alist.bak $INSTALL_PATH/alist
-        systemctl start alist
+        systemctl start alist@
         rm -f /tmp/alist.tar.gz
         exit 1
     fi
     rm -f /tmp/alist.tar.gz /tmp/alist.bak
-    echo -e "${GREEN_COLOR}启动 Alist 进程${RES}\r\n"
-    systemctl restart alist
-    echo -e "${GREEN_COLOR}更新完成！${RES}"
+    echo -e "${GREEN_COLOR}启动 Alist 进程${RES}\r\n}"
+    systemctl restart alist@
+    echo -e ${GREEN_COLOR}更新完成！${RES}"
 }
 
 UNINSTALL() {
@@ -328,16 +325,16 @@ UNINSTALL() {
         exit 1
     fi
     echo -e "${RED_COLOR}警告：卸载后将删除本地 Alist 目录、数据库文件及命令行工具！${RES}"
-    read -p "是否确认卸载？[Y/n]: " choice
+    read -p "是否确认卸载？[Y/n]: " choice </dev/tty
     case "${choice:-y}" in
         [yY]|"")
             echo -e "${GREEN_COLOR}开始卸载...${RES}"
             echo -e "${GREEN_COLOR}停止 Alist 进程${RES}"
-            systemctl stop alist
-            systemctl disable alist
+            systemctl stop alist@
+            systemctl disable alist@.service
             echo -e "${GREEN_COLOR}删除 Alist 文件${RES}"
             rm -rf $INSTALL_PATH
-            rm -f /etc/systemd/system/alist.service
+            rm -f /etc/systemd/system/alist@.service
             systemctl daemon-reload
             if [ -f "$MANAGER_PATH" ] || [ -L "$COMMAND_LINK" ]; then
                 echo -e "${GREEN_COLOR}删除命令行工具${RES}"
@@ -360,64 +357,64 @@ RESET_PASSWORD() {
         echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
         exit 1
     fi
-    echo -e "\n请选择密码重置方式"
+    echo -e "\n请选择密码重置方式："
     echo -e "${GREEN_COLOR}1、生成随机密码${RES}"
     echo -e "${GREEN_COLOR}2、设置新密码${RES}"
     echo -e "${GREEN_COLOR}0、返回主菜单${RES}"
     echo
-    read -p "请输入选项 [0-2]: " choice
-    cd $INSTALL_PATH
-    systemctl stop alist 2>/dev/null || true
+    read -p "请输入选项 [0-2]: " choice </dev/tty
+    cd "$INSTALL_PATH"
+    systemctl stop alist@ >/dev/null 2>&1
     case "$choice" in
         1)
             echo -e "${GREEN_COLOR}正在生成随机密码...${RES}"
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
             TEMP_LOG=$(mktemp)
-            ./alist admin random 2>&1 | tee "$TEMP_LOG"
-            sed -n 's/.*username: \(.*\)/账号: \1/p; s/.*password: \(.*\)/密码: \1/p' "$TEMP_LOG"
+            ./alist admin random >"$TEMP_LOG" 2>&1
+            sed 's/.*username:/账号: /; s/.*password: \(.*\)/密码: \1/' "$TEMP_LOG"
             rm -f "$TEMP_LOG"
-            systemctl start alist
+            systemctl start alist@
             exit 0
             ;;
         2)
-            read -p "请输入新密码: " new_password
+            read -p "请输入新密码: " new_password "</dev/tty
             if [ -z "$new_password" ]; then
                 echo -e "${RED_COLOR}错误：密码不能为空${RES}"
-                systemctl start alist
+                systemctl start alist@
                 exit 1
             fi
             echo -e "${GREEN_COLOR}正在设置新密码...${RES}"
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
             TEMP_LOG=$(mktemp)
-            ./alist admin set "$new_password" 2>&1 | tee "$TEMP_LOG"
-            sed -n 's/.*username: \(.*\)/账号: \1/p; s/.*password: \(.*\)/密码: \1/p' "$TEMP_LOG"
+            ./alist admin set "$new_password" >"$TEMP_LOG" 2>&1
+            sed 's/.*username:/账号: /; s/.*password:.*$/密码: $new_password/' "$TEMP_LOG"
             rm -f "$TEMP_LOG"
-            systemctl start alist
+            systemctl start alist@
             exit 0
             ;;
         0)
-            systemctl start alist
+            systemctl start alist@
             return 0
             ;;
         *)
             echo -e "${RED_COLOR}无效的选项${RES}"
-            systemctl start alist
+            systemctl start alist@
             exit 1
             ;;
     esac
 }
 
-MANAGER_PATH="/usr/local/sbin/alist-manager"
+MANAGER_PATH="/usr/local/sbin/alist-manager/user"
 COMMAND_LINK="/usr/local/bin/alist"
 
 INSTALL_CLI() {
     if [ "$(id -u)" != "0" ]; then
         echo -e "${RED_COLOR}错误：安装命令行工具需要 root 权限${RES}"
-        return 1
+        exit 1
     fi
     TEMP_SCRIPT=$(mktemp)
     if ! download_file "https://raw.githubusercontent.com/guihuatu2022/alist-backup/main/v3.sh" "$TEMP_SCRIPT"; then
-        echo -e "${RED_COLOR}错误：无法下载管理脚本${RES}"
+        echo -e "${RED_COLOR}错误：下载管理脚本失败${RES}"
         rm -f "$TEMP_SCRIPT"
         return 1
     fi
@@ -451,7 +448,7 @@ INSTALL_CLI() {
     }
     rm -f "$TEMP_SCRIPT"
     echo -e "${GREEN_COLOR}命令行工具安装成功！${RES}"
-    echo -e "\n现在你可以使用以下命令："
+    echo -e "\n现在你可以："
     echo -e "1. ${GREEN_COLOR}alist${RES}          - 快捷命令"
     echo -e "2. ${GREEN_COLOR}alist-manager${RES}  - 完整命令"
     return 0
@@ -473,10 +470,10 @@ SHOW_MENU() {
     echo -e "${GREEN_COLOR}-------------------${RES}"
     echo -e "${GREEN_COLOR}0、退出脚本${RES}"
     echo
-    read -p "请输入选项 [0-8]: " choice
+    read -p "请输入选项 [0-8]: " choice </dev/tty
     case "$choice" in
         1)
-            INSTALL_PATH='/opt/alist'
+            INSTALL_PATH='/opt/alist/dev'
             CHECK
             INSTALL
             INIT
@@ -496,7 +493,7 @@ SHOW_MENU() {
                 echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
                 return 1
             fi
-            if systemctl is-active alist >/dev/null 2>&1; then
+            if systemctl is-active alist@ >/dev/null 2>&1; then
                 echo -e "${GREEN_COLOR}Alist 当前状态为：运行中${RES}"
             else
                 echo -e "${RED_COLOR}Alist 当前状态为：停止${RES}"
@@ -512,7 +509,7 @@ SHOW_MENU() {
                 echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
                 return 1
             fi
-            systemctl start alist
+            systemctl start alist@
             echo -e "${GREEN_COLOR}Alist 已启动${RES}"
             return 0
             ;;
@@ -521,7 +518,7 @@ SHOW_MENU() {
                 echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
                 return 1
             fi
-            systemctl stop alist
+            systemctl stop alist@
             echo -e "${GREEN_COLOR}Alist 已停止${RES}"
             return 0
             ;;
@@ -530,7 +527,7 @@ SHOW_MENU() {
                 echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
                 return 1
             fi
-            systemctl restart alist
+            systemctl restart alist@
             echo -e "${GREEN_COLOR}Alist 已重启${RES}"
             return 0
             ;;
@@ -562,14 +559,14 @@ elif [ "$1" = "install" ]; then
     SUCCESS
 elif [ "$1" = "update" ]; then
     if [ $# -gt 1 ]; then
-        echo -e "${RED_COLOR}错误：update 命令不需要指定路径${RES}"
+        echo -e "${RED_COLOR}错误：update 命令不需要参数路径${RES}"
         echo -e "正确用法: $0 update"
         exit 1
     fi
     UPDATE
 elif [ "$1" = "uninstall" ]; then
     if [ $# -gt 1 ]; then
-        echo -e "${RED_COLOR}错误：uninstall 命令不需要指定路径${RES}"
+        echo -e "${RED_COLOR}错误：uninstall 命令不需要参数${RES}"
         echo -e "正确用法: $0 uninstall"
         exit 1
     fi
@@ -580,4 +577,5 @@ else
     echo -e "     $0 update              # 更新 Alist"
     echo -e "     $0 uninstall          # 卸载 Alist"
     echo -e "     $0                    # 显示交互菜单"
+    exit 1
 fi
