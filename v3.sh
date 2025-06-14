@@ -195,11 +195,22 @@ EOF
     # 生成并显示初始管理员账号密码
     echo "生成初始管理员账号密码..."
     systemctl stop alist 2>/dev/null || true
-    ADMIN_OUTPUT=$("$INSTALL_DIR/alist" admin random 2>&1)
+    TEMP_LOG=$(mktemp)
+    "$INSTALL_DIR/alist" admin random 2>&1 | tee "$TEMP_LOG"
     echo -e "\e[32m"
     echo "初始管理员账号信息："
-    echo "$ADMIN_OUTPUT" | grep -E "username|password"
+    awk '/username:/ {print $NF} /password:/ {print $NF}' "$TEMP_LOG" | while read -r line; do
+        if [ "$line" == "admin" ]; then
+            echo "username: $line"
+        else
+            echo "password: $line"
+        fi
+    done
+    if [ ! -s "$TEMP_LOG" ] || ! grep -q "username" "$TEMP_LOG"; then
+        echo "未找到账号密码信息，请手动运行 'alist admin random'"
+    fi
     echo -e "\e[0m"
+    rm -f "$TEMP_LOG"
 
     # 启动服务
     systemctl start alist
