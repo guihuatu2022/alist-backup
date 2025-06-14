@@ -54,10 +54,19 @@ install_alist() {
     chmod +x "$INSTALL_DIR/alist"
     rm /tmp/${BINARY_PREFIX}
 
-    # 创建符号链接指向脚本本身
+    # 清理旧的符号链接
+    rm -f /usr/local/bin/alist /usr/local/bin/v3.sh
+
+    # 复制脚本到 /usr/local/bin/v3.sh
     cp "$0" "$SCRIPT_PATH"
     chmod +x "$SCRIPT_PATH"
+
+    # 创建符号链接指向脚本
     ln -sf "$SCRIPT_PATH" /usr/local/bin/alist
+
+    # 验证符号链接
+    echo "验证符号链接："
+    ls -l /usr/local/bin/alist
 
     # 配置 systemd 服务（开机自启和守护进程）
     cat > /etc/systemd/system/alist.service << EOF
