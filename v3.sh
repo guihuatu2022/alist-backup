@@ -62,7 +62,7 @@ install_alist() {
     cat > "$SCRIPT_PATH" << 'EOF'
 #!/bin/bash
 
-# AList 管理脚本：支持 install、uninstall、server、admin，默认路径 /opt/alist
+# AList 管理脚本：支持 server、admin、管理菜单，默认路径 /opt/alist
 
 # 检查 root 权限
 [ "$(id -u)" != "0" ] && { echo "需要 root 权限，请使用 sudo"; exit 1; }
@@ -127,7 +127,6 @@ case "$1" in
         "$INSTALL_DIR/alist" admin
         ;;
     "")
-        [ ! -f "$INSTALL_DIR/alist" ] && { echo "AList 未安装，请先运行 install"; exit 1; }
         manage_menu
         ;;
     *)
@@ -185,10 +184,10 @@ case "$1" in
         uninstall_alist
         ;;
     server)
-        "$INSTALL_DIR/alist" server
+        [ -f "$INSTALL_DIR/alist" ] && "$INSTALL_DIR/alist" server || { echo "AList 未安装"; exit 1; }
         ;;
     admin)
-        "$INSTALL_DIR/alist" admin
+        [ -f "$INSTALL_DIR/alist" ] && "$INSTALL_DIR/alist" admin || { echo "AList 未安装"; exit 1; }
         ;;
     *)
         echo "使用方法: $0 {install|uninstall|server|admin}"
