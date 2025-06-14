@@ -1,9 +1,10 @@
 #!/bin/bash
+# -*- coding: utf-8 -*-
 ###############################################################################
 #
 # Alist Manager Script
 #
-# Version: 1.0.3
+# Version: 1.0.4
 # Last Updated: 2025-06-14
 #
 # Description: 
@@ -144,6 +145,7 @@ download_file() {
     local max_retries=3
     local retry_count=0
     local wait_time=5
+    echo -e "${GREEN_COLOR}尝试下载 URL: $url${RES}"
     while [ $retry_count -lt $max_retries ]; do
         if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
             if [ -f "$output" ] && [ -s "$output" ]; then
@@ -184,7 +186,8 @@ INSTALL() {
     CURRENT_DIR=$(pwd)
     GH_PROXY=$(get_proxy)
     echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
-    if ! download_file "${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz" "/tmp/alist.tar.gz"; then
+    local download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         handle_error 1 "下载失败！"
     fi
     if ! tar zxf /tmp/alist.tar.gz -C "$INSTALL_PATH/"; then
@@ -276,7 +279,8 @@ UPDATE() {
     systemctl stop alist
     cp "$INSTALL_PATH/alist" /tmp/alist.bak
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
-    if ! download_file "${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz" "/tmp/alist.tar.gz"; then
+    local download_url="${GH_PROXY}${GH_DOWNLOAD_URL}/alist-linux-${ARCH}.tar.gz"
+    if ! download_file "$download_url" "/tmp/alist.tar.gz"; then
         echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/alist.bak "$INSTALL_PATH/alist"
