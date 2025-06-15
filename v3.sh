@@ -27,6 +27,10 @@ if [ -z "$BASH_VERSION" ]; then
     echo "错误：此脚本需要 bash，请使用 bash 执行" >&2
     exit 1
 fi
+if [ "$(readlink /bin/sh)" != "bash" ]; then
+    echo "警告：/bin/sh 未链接到 bash，可能导致解析错误" >&2
+    echo "建议运行：sudo ln -sf /bin/bash /bin/sh" >&2
+fi
 
 # 日志文件
 LOG_FILE="/var/log/alist-backup-install.log"
@@ -47,6 +51,9 @@ if ! command -v curl >/dev/null 2>&1; then
 fi
 if ! command -v tar >/dev/null 2>&1; then
     handle_error 1 "未找到 tar 命令，请先安装"
+fi
+if ! command -v netstat >/dev/null 2>&1; then
+    handle_error 1 "未找到 netstat 命令，请先安装"
 fi
 
 # 配置部分
@@ -140,6 +147,13 @@ fi
 
 CHECK() {
     echo "Executing CHECK" >> "$LOG_FILE"
+    # 检查端口冲突
+    if netstat -tuln | grep -q ":5244"; then
+        echo -e "${RED_COLOR}错误：5244 端口已被占用！${RES}" >&2
+        echo -e "请运行以下命令查找占用进程并终止：${YELLOW_COLOR}sudo netstat -tulnp | grep 5244${RES}" >&2
+        echo "ERROR: Port 5244 is already in use" >> "$LOG_FILE"
+        exit 1
+    fi
     if [ ! -d "$(dirname "$INSTALL_PATH")" ]; then
         echo -e "${GREEN_COLOR}目录不存在，正在创建...${RES}"
         mkdir -p "$(dirname "$INSTALL_PATH")" || handle_error 1 "无法创建目录 $(dirname "$INSTALL_PATH")"
@@ -191,6 +205,7 @@ download_file() {
 INSTALL() {
     echo "Executing INSTALL" >> "$LOG_FILE"
     CURRENT_DIR=$(pwd)
+    echo "Current directory: $CURRENT_DIR" >> "$LOG_FILE"
     echo -e "${GREEN_COLOR}是否使用代理下载？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须以 https:// 开头，/ 结尾，例如 https://ghproxy.com/${RES}"
     read -p "请输入代理地址或按回车继续: " proxy_input
@@ -200,10 +215,12 @@ INSTALL() {
         echo "Using proxy: $proxy_input" >> "$LOG_FILE"
     fi
     echo -e "${GREEN_COLOR}下载 Alist Backup ($ARCH) ...${RES}"
+    echo "Starting download" >> "$LOG_FILE"
     if ! download_file "$DOWNLOAD_URL" "/tmp/alist-backup.tar.gz"; then
         handle_error 1 "下载失败"
     fi
-    if ! tar zxf "/tmp/alist-backup.tar.gz" -C "$INSTALL_PATH"/; then
+    echo "Download completed, extracting" >> "$LOG_FILE"
+    if ! tar zxf "/tmp/alist-backup.tar.gz" -C "$INSTALL_PATH"; then
         echo -e "${RED_COLOR}解压失败！${RES}" >&2
         echo "ERROR: Failed to extract tar.gz" >> "$LOG_FILE"
         rm -f "/tmp/alist-backup.tar.gz"
@@ -215,7 +232,8 @@ INSTALL() {
         echo "Binary found and permissions set" >> "$LOG_FILE"
         # 尝试获取初始账号密码
         cd "$INSTALL_PATH" || handle_error 1 "无法切换到目录 $INSTALL_PATH"
-        ACCOUNT_INFO=$($INSTALL_PATH/alist admin random 2>&1)
+        echo "Generating random admin credentials" >> "$LOG_FILE"
+        ACCOUNT_INFO=$("$INSTALL_PATH/alist" admin random 2>&1)
         ADMIN_USER=$(echo "$ACCOUNT_INFO" | grep "username:" | sed 's/.*username://' | tr -d ' ')
         ADMIN_PASS=$(echo "$ACCOUNT_INFO" | grep "password:" | sed 's/.*password://' | tr -d ' ')
         echo "Admin user: $ADMIN_USER, Admin pass: $ADMIN_PASS" >> "$LOG_FILE"
@@ -322,7 +340,7 @@ UPDATE() {
         echo "ERROR: Update failed, download unsuccessful" >> "$LOG_FILE"
         exit 1
     fi
-    if ! tar zxf "/tmp/alist-backup.tar.gz" -C "$INSTALL_PATH"/; then
+    if ! tar zxf "/tmp/alist-backup.tar.gz" -C "$INSTALL_PATH"; then
         echo -e "${RED_COLOR}解压失败，更新终止${RES}" >&2
         mv /tmp/alist.bak "$INSTALL_PATH/alist"
         systemctl start alist-backup
