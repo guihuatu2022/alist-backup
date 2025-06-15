@@ -1,28 +1,28 @@
 #!/bin/bash
 ###############################################################################
 #
-# Alist Manager Script
+# Alist Backup Manager Script
 #
-# Version: 1.0.1  # 更新版本号
-# Last Updated: 2025-06-14 # 更新日期
+# Version: 1.0.0
+# Last Updated: 2025-06-15
 #
 # Description:
-#    A management script for Alist (https://alist.nn.ci)
-#    Provides installation, update, uninstallation and management functions
+#   A management script for Alist Backup (https://github.com/guihuatu2022/alist-backup)
+#   Provides installation, update, uninstallation, and management functions
 #
 # Requirements:
-#    - Linux with systemd
-#    - Root privileges for installation
-#    - curl, tar
-#    - x86_64 or arm64 architecture
+#   - Linux with systemd
+#   - Root privileges for installation
+#   - curl, tar
+#   - x86_64 architecture
 #
-# Author: Troray
-# Repository: https://github.com/Troray/docs
+# Author: Adapted from Troray's Alist script
+# Repository: N/A
 # License: MIT
 #
 ###############################################################################
 
-# 在脚本开头添加错误处理函数
+# Error handling function
 handle_error() {
     local exit_code=$1
     local error_msg=$2
@@ -30,162 +30,121 @@ handle_error() {
     exit ${exit_code}
 }
 
-# 颜色配置
+# Check for curl
+if ! command -v curl >/dev/null 2>&1; then
+    handle_error 1 "未找到 curl 命令，请先安装"
+fi
+
+# Configuration
+#######################
+# Download URL for Alist Backup
+BACKUP_DOWNLOAD_URL="https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup/alist-linux-amd64.tar.gz"
+#######################
+
+# Color configuration
 RED_COLOR='\e[1;31m'
 GREEN_COLOR='\e[1;32m'
 YELLOW_COLOR='\e[1;33m'
 RES='\e[0m'
 
-# 初始检查：curl是否安装
-if ! command -v curl >/dev/null 2>&1; then
-    handle_error 1 "未找到 curl 命令，请先安装"
-fi
-
-# 配置部分
-#######################
-# GitHub 相关配置 - 已替换为你的项目地址
-# 注意：如果你的Release Tag是固定的"alist-backup"，则保持如下
-# 如果你未来会使用最新的Release (例如 v1.0.0, v1.0.1), 则应该使用 'latest/download'
-# 并确保你的Release资产命名遵循 'alist-linux-musl-ARCH.tar.gz'
-GH_DOWNLOAD_URL_BASE="https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup"
-#######################
-
-# 添加一个函数来获取已安装的 Alist 路径
+# Function to get installed Alist Backup path
 GET_INSTALLED_PATH() {
-    # 从 service 文件中获取工作目录
-    if [ -f "/etc/systemd/system/alist.service" ]; then
-        installed_path=$(grep "WorkingDirectory=" /etc/systemd/system/alist.service | cut -d'=' -f2)
+    if [ -f "/etc/systemd/system/alist-backup.service" ]; then
+        installed_path=$(grep "WorkingDirectory=" /etc/systemd/system/alist-backup.service | cut -d'=' -f2)
         if [ -f "$installed_path/alist" ]; then
             echo "$installed_path"
             return 0
         fi
     fi
-    
-    # 如果未找到或路径无效，返回默认路径
-    echo "/opt/alist"
+    echo "/opt/alist-backup"
 }
 
-# 设置安装路径
+# Set installation path
 if [ ! -n "$2" ]; then
-    INSTALL_PATH='/opt/alist'
+    INSTALL_PATH='/opt/alist-backup'
 else
     INSTALL_PATH=${2%/}
-    if ! [[ $INSTALL_PATH == */alist ]]; then
-        INSTALL_PATH="$INSTALL_PATH/alist"
+    if ! [[ $INSTALL_PATH == */alist-backup ]]; then
+        INSTALL_PATH="$INSTALL_PATH/alist-backup"
     fi
-    
-    # 创建父目录（如果不存在）
     parent_dir=$(dirname "$INSTALL_PATH")
     if [ ! -d "$parent_dir" ]; then
-        mkdir -p "$parent_dir" || {
-            echo -e "${RED_COLOR}错误：无法创建目录 $parent_dir${RES}"
-            exit 1
-        }
+        mkdir -p "$parent_dir" || handle_error 1 "无法创建目录 $parent_dir"
     fi
-    
-    # 在创建目录后再检查权限
     if ! [ -w "$parent_dir" ]; then
-        echo -e "${RED_COLOR}错误：目录 $parent_dir 没有写入权限${RES}"
-        exit 1
+        handle_error 1 "目录 $parent_dir 没有写入权限"
     fi
 fi
 
-# 如果是更新或卸载操作，使用已安装的路径
+# Use installed path for update or uninstall
 if [ "$1" = "update" ] || [ "$1" = "uninstall" ]; then
     INSTALL_PATH=$(GET_INSTALLED_PATH)
 fi
 
 clear
 
-# 获取平台架构
+# Get platform architecture
 if command -v arch >/dev/null 2>&1; then
-  platform=$(arch)
+    platform=$(arch)
 else
-  platform=$(uname -m)
+    platform=$(uname -m)
 fi
 
 ARCH="UNKNOWN"
-
 if [ "$platform" = "x86_64" ]; then
-  ARCH=amd64
-elif [ "$platform" = "aarch64" ]; then
-  ARCH=arm64
+    ARCH=amd64
 fi
 
-# 权限和环境检查
+# Permission and environment checks
 if [ "$(id -u)" != "0" ]; then
-  if [ "$1" = "install" ] || [ "$1" = "update" ] || [ "$1" = "uninstall" ]; then
-    echo -e "\r\n${RED_COLOR}错误：请使用 root 权限运行此命令！${RES}\r\n"
-    echo -e "提示：使用 ${GREEN_COLOR}sudo $0 $1${RES} 重试\r\n"
-    exit 1
-  fi
+    if [ "$1" = "install" ] || [ "$1" = "update" ] || [ "$1" = "uninstall" ]; then
+        echo -e "\r\n${RED_COLOR}错误：请使用 root 权限运行此命令！${RES}\r\n"
+        echo -e "提示：使用 ${GREEN_COLOR}sudo $0 $1${RES} 重试\r\n"
+        exit 1
+    fi
 elif [ "$ARCH" == "UNKNOWN" ]; then
-  echo -e "\r\n${RED_COLOR}出错了${RES}，一键安装目前仅支持 x86_64 和 arm64 平台。\r\n"
-  exit 1
+    echo -e "\r\n${RED_COLOR}出错了${RES}，一键安装目前仅支持 x86_64 平台。\r\n"
+    exit 1
 elif ! command -v systemctl >/dev/null 2>&1; then
-  echo -e "\r\n${RED_COLOR}出错了${RES}，无法确定你当前的 Linux 发行版。\r\n建议手动安装。\r\n"
-  exit 1
+    echo -e "\r\n${RED_COLOR}出错了${RES}，无法确定你当前的 Linux 发行版。\r\n建议手动安装。\r\n"
+    exit 1
 fi
 
 CHECK() {
-  # 检查目标目录是否存在，如果不存在则创建
-  if [ ! -d "$(dirname "$INSTALL_PATH")" ]; then
-    echo -e "${GREEN_COLOR}目录不存在，正在创建...${RES}"
-    mkdir -p "$(dirname "$INSTALL_PATH")" || {
-      echo -e "${RED_COLOR}错误：无法创建目录 $(dirname "$INSTALL_PATH")${RES}"
-      exit 1
-    }
-  fi
-
-  # 检查是否已安装
-  if [ -f "$INSTALL_PATH/alist" ]; then
-    echo "此位置已经安装，请选择其他位置，或使用更新命令"
-    exit 0
-  fi
-
-  # 创建或清空安装目录
-  if [ ! -d "$INSTALL_PATH/" ]; then
-    mkdir -p "$INSTALL_PATH" || { # 使用引号防止路径包含空格时出错
-      echo -e "${RED_COLOR}错误：无法创建安装目录 $INSTALL_PATH${RES}"
-      exit 1
-    }
-  else
-    rm -rf "$INSTALL_PATH"/* && mkdir -p "$INSTALL_PATH" # 清空目录但保留自身
-  fi
-
-  echo -e "${GREEN_COLOR}安装目录准备就绪：$INSTALL_PATH${RES}"
+    if [ ! -d "$(dirname "$INSTALL_PATH")" ]; then
+        echo -e "${GREEN_COLOR}目录不存在，正在创建...${RES}"
+        mkdir -p "$(dirname "$INSTALL_PATH")" || handle_error 1 "无法创建目录 $(dirname "$INSTALL_PATH")"
+    fi
+    if [ -f "$INSTALL_PATH/alist" ]; then
+        echo "此位置已经安装，请选择其他位置，或使用更新命令"
+        exit 0
+    fi
+    if [ ! -d "$INSTALL_PATH/" ]; then
+        mkdir -p $INSTALL_PATH || handle_error 1 "无法创建安装目录 $INSTALL_PATH"
+    else
+        rm -rf $INSTALL_PATH && mkdir -p $INSTALL_PATH
+    fi
+    echo -e "${GREEN_COLOR}安装目录准备就绪：$INSTALL_PATH${RES}"
 }
 
-# 添加全局变量存储账号密码
-ADMIN_USER=""
-ADMIN_PASS=""
-
-# 添加下载函数，包含重试机制
+# Download function with retry mechanism
 download_file() {
     local url="$1"
     local output="$2"
     local max_retries=3
     local retry_count=0
     local wait_time=5
-
-    echo -e "${GREEN_COLOR}正在尝试从 ${url} 下载到 ${output}...${RES}"
     while [ $retry_count -lt $max_retries ]; do
         if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
-            if [ -f "$output" ] && [ -s "$output" ]; then   # 检查文件是否存在且不为空
-                echo -e "${GREEN_COLOR}下载成功！${RES}"
+            if [ -f "$output" ] && [ -s "$output" ]; then
                 return 0
-            else
-                echo -e "${YELLOW_COLOR}警告：下载文件 ${output} 为空或不存在。${RES}"
             fi
-        else
-            echo -e "${YELLOW_COLOR}下载命令执行失败。${RES}"
         fi
-        
         retry_count=$((retry_count + 1))
         if [ $retry_count -lt $max_retries ]; then
             echo -e "${YELLOW_COLOR}下载失败，${wait_time} 秒后进行第 $((retry_count + 1)) 次重试...${RES}"
             sleep $wait_time
-            wait_time=$((wait_time + 5))   # 每次重试增加等待时间
+            wait_time=$((wait_time + 5))
         else
             echo -e "${RED_COLOR}下载失败，已重试 $max_retries 次${RES}"
             return 1
@@ -195,572 +154,347 @@ download_file() {
 }
 
 INSTALL() {
-  # 保存当前目录
-  CURRENT_DIR=$(pwd)
-  
-  local GH_DOWNLOAD_URL="$GH_DOWNLOAD_URL_BASE" # 默认使用全局配置的基础URL
-
-    # 询问是否使用代理
-    echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
-    echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
-    echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
-
-  # 如果用户输入了代理地址，则使用代理拼接下载链接
-  if [ -n "$proxy_input" ]; then
-    GH_PROXY="$proxy_input"
-    GH_DOWNLOAD_URL="${GH_PROXY}${GH_DOWNLOAD_URL_BASE}" # 拼接代理
-    echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
-  else
-    echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
-  fi
-
-  # 下载 Alist 程序
-  echo -e "\r\n${GREEN_COLOR}开始下载 Alist 二进制文件...${RES}"
-  
-  # 使用拼接后的 GitHub 下载地址
-  if ! download_file "${GH_DOWNLOAD_URL}/alist-linux-musl-$ARCH.tar.gz" "/tmp/alist.tar.gz"; then
-    echo -e "${RED_COLOR}下载失败！${RES}"
-    exit 1
-  fi
-
-  # 解压文件
-  echo -e "${GREEN_COLOR}正在解压文件到 ${INSTALL_PATH}...${RES}"
-  if ! tar zxf /tmp/alist.tar.gz -C "$INSTALL_PATH/"; then # 使用引号防止路径包含空格时出错
-    echo -e "${RED_COLOR}解压失败！${RES}"
-    rm -f /tmp/alist.tar.gz
-    exit 1
-  fi
-
-  if [ -f "$INSTALL_PATH/alist" ]; then
-    echo -e "${GREEN_COLOR}下载和解压成功，正在进行后续安装步骤...${RES}"
-    
-    # 获取初始账号密码（临时切换目录）
-    echo -e "${GREEN_COLOR}正在获取 Alist 初始账号信息...${RES}"
-    cd "$INSTALL_PATH" || handle_error 1 "无法进入安装目录 $INSTALL_PATH"
-    ACCOUNT_INFO=$("$INSTALL_PATH/alist" admin random 2>&1)
-    # 优化了sed命令，使其更精确地提取信息
-    ADMIN_USER=$(echo "$ACCOUNT_INFO" | grep "username:" | awk '{print $NF}')
-    ADMIN_PASS=$(echo "$ACCOUNT_INFO" | grep "password:" | awk '{print $NF}')
-    # 切回原目录
-    cd "$CURRENT_DIR" || handle_error 1 "无法返回原目录 $CURRENT_DIR"
-  else
-    echo -e "${RED_COLOR}安装失败：未在目标目录找到 Alist 可执行文件！${RES}"
-    rm -rf "$INSTALL_PATH" # 彻底清理
-    mkdir -p "$INSTALL_PATH" # 重新创建空目录
-    exit 1
-  fi
-
-  # 清理临时文件
-  rm -f /tmp/alist*
-  echo -e "${GREEN_COLOR}临时下载文件已清理。${RES}"
+    CURRENT_DIR=$(pwd)
+    echo -e "${GREEN_COLOR}下载 Alist Backup ...${RES}"
+    if ! download_file "${BACKUP_DOWNLOAD_URL}" "/tmp/alist-backup.tar.gz"; then
+        handle_error 1 "下载失败！"
+    fi
+    if ! tar zxf /tmp/alist-backup.tar.gz -C $INSTALL_PATH/; then
+        echo -e "${RED_COLOR}解压失败！${RES}"
+        rm -f /tmp/alist-backup.tar.gz
+        exit 1
+    fi
+    if [ -f $INSTALL_PATH/alist ]; then
+        echo -e "${GREEN_COLOR}下载成功，正在安装...${RES}"
+    else
+        echo -e "${RED_COLOR}安装失败！${RES}"
+        rm -rf $INSTALL_PATH
+        mkdir -p $INSTALL_PATH
+        exit 1
+    fi
+    rm -f /tmp/alist-backup*
 }
 
-
 INIT() {
-  if [ ! -f "$INSTALL_PATH/alist" ]; then
-    echo -e "\r\n${RED_COLOR}出错了${RES}，当前系统未安装 Alist 可执行文件。\r\n"
-    exit 1
-  fi
-
-  echo -e "${GREEN_COLOR}正在创建 systemd 服务文件...${RES}"
-  # 创建 systemd 服务文件
-  cat >/etc/systemd/system/alist.service <<EOF
+    if [ ! -f "$INSTALL_PATH/alist" ]; then
+        handle_error 1 "当前系统未安装 Alist Backup"
+    fi
+    cat >/etc/systemd/system/alist-backup.service <<EOF
 [Unit]
-Description=Alist service
+Description=Alist Backup service
 Wants=network.target
 After=network.target network.service
 
 [Service]
 Type=simple
-WorkingDirectory=${INSTALL_PATH} # 使用引号防止路径包含空格
-ExecStart=${INSTALL_PATH}/alist server # 使用引号防止路径包含空格
+WorkingDirectory=$INSTALL_PATH
+ExecStart=$INSTALL_PATH/alist server
 KillMode=process
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-  systemctl daemon-reload
-  systemctl enable alist >/dev/null 2>&1
-  echo -e "${GREEN_COLOR}systemd 服务配置完成。${RES}"
+    systemctl daemon-reload
+    systemctl enable alist-backup >/dev/null 2>&1
 }
 
 SUCCESS() {
-  clear  # 只在开始时清屏一次
-  print_line() {
-    local text="$1"
-    local width=51
-    printf "│ %-${width}s │\n" "$text"
-  }
-
-  # 获取本地 IP
-  LOCAL_IP=$(ip addr show | grep -w inet | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -n1)
-  # 获取公网 IP
-  PUBLIC_IP=$(curl -s4 ip.sb || curl -s4 ifconfig.me || echo "获取失败")
-  
-  echo -e "┌────────────────────────────────────────────────────┐"
-  print_line "Alist 安装成功！"
-  print_line ""
-  print_line "访问地址："
-  print_line "  局域网：http://${LOCAL_IP}:5244/"
-  print_line "  公网：  http://${PUBLIC_IP}:5244/"
-  print_line "配置文件：$INSTALL_PATH/data/config.json"
-  print_line ""
-  if [ ! -z "$ADMIN_USER" ] && [ ! -z "$ADMIN_PASS" ]; then
-    print_line "账号信息："
-    print_line "默认账号：$ADMIN_USER"
-    print_line "初始密码：$ADMIN_PASS"
-  fi
-  echo -e "└────────────────────────────────────────────────────┘"
-  
-  # 安装命令行工具
-  if ! INSTALL_CLI; then
-    echo -e "${YELLOW_COLOR}警告：命令行工具安装失败，但不影响 Alist 的使用${RES}"
-  fi
-  
-  echo -e "\n${GREEN_COLOR}启动服务中...${RES}"
-  systemctl restart alist
-  echo -e "管理: 在任意目录输入 ${GREEN_COLOR}alist${RES} 打开管理菜单"
-  
-  echo -e "\n${YELLOW_COLOR}温馨提示：如果端口无法访问，请检查服务器安全组、防火墙和服务状态${RES}"
-  echo
-  exit 0   # 直接退出，不再返回菜单
+    clear
+    print_line() {
+        local text="$1"
+        local width=51
+        printf "│ %-${width}s │\n" "$text"
+    }
+    LOCAL_IP=$(ip addr show | grep -w inet | grep -v "127.0.0.1" | awk '{print $2}' | cut -d/ -f1 | head -n1)
+    PUBLIC_IP=$(curl -s4 ip.sb || curl -s4 ifconfig.me || echo "获取失败")
+    echo -e "┌────────────────────────────────────────────────────┐"
+    print_line "Alist Backup 安装成功！"
+    print_line ""
+    print_line "访问地址："
+    print_line "  局域网：http://${LOCAL_IP}:5244/"
+    print_line "  公网：  http://${PUBLIC_IP}:5244/"
+    print_line "配置文件：$INSTALL_PATH/data/config.json"
+    print_line ""
+    echo -e "└────────────────────────────────────────────────────┘"
+    if ! INSTALL_CLI; then
+        echo -e "${YELLOW_COLOR}警告：命令行工具安装失败，但不影响 Alist Backup 的使用${RES}"
+    fi
+    echo -e "\n${GREEN_COLOR}启动服务中...${RES}"
+    systemctl restart alist-backup
+    echo -e "管理: 在任意目录输入 ${GREEN_COLOR}alist-backup${RES} 打开管理菜单"
+    echo -e "\n${YELLOW_COLOR}温馨提示：如果端口无法访问，请检查服务器安全组、防火墙和服务状态${RES}"
+    exit 0
 }
 
 UPDATE() {
     if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：未在 $INSTALL_PATH 找到 Alist 可执行文件。\r\n"
+        handle_error 1 "未在 $INSTALL_PATH 找到 Alist Backup"
+    fi
+    echo -e "${GREEN_COLOR}开始更新 Alist Backup ...${RES}"
+    systemctl stop alist-backup
+    cp $INSTALL_PATH/alist /tmp/alist.bak
+    echo -e "${GREEN_COLOR}下载 Alist Backup ...${RES}"
+    if ! download_file "${BACKUP_DOWNLOAD_URL}" "/tmp/alist-backup.tar.gz"; then
+        echo -e "${RED_COLOR}下载失败，更新终止${RES}"
+        mv /tmp/alist.bak $INSTALL_PATH/alist
+        systemctl start alist-backup
         exit 1
     fi
-
-    echo -e "${GREEN_COLOR}开始更新 Alist ...${RES}"
-
-    local GH_DOWNLOAD_URL="$GH_DOWNLOAD_URL_BASE" # 默认使用全局配置的基础URL
-
-    # 询问是否使用代理
-    echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
-    echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
-    echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
-    read -p "请输入代理地址或直接按回车继续: " proxy_input
-
-    # 如果用户输入了代理地址，则使用代理拼接下载链接
-    if [ -n "$proxy_input" ]; then
-        GH_PROXY="$proxy_input"
-        GH_DOWNLOAD_URL="${GH_PROXY}${GH_DOWNLOAD_URL_BASE}" # 拼接代理
-        echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
+    if ! tar zxf /tmp/alist-backup.tar.gz -C $INSTALL_PATH/; then
+        echo -e "${RED_COLOR}解压失败，更新终止${RES}"
+        mv /tmp/alist.bak $INSTALL_PATH/alist
+        systemctl start alist-backup
+        rm -f /tmp/alist-backup.tar.gz
+        exit 1
+    fi
+    if [ -f $INSTALL_PATH/alist ]; then
+        echo -e "${GREEN_COLOR}下载成功，正在更新${RES}"
     else
-        echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
-    fi
-
-    # 停止 Alist 服务
-    echo -e "${GREEN_COLOR}停止 Alist 进程...${RES}\r\n"
-    systemctl stop alist
-
-    # 备份二进制文件
-    echo -e "${GREEN_COLOR}备份当前 Alist 可执行文件...${RES}"
-    if [ -f "$INSTALL_PATH/alist" ]; then
-        cp "$INSTALL_PATH/alist" "/tmp/alist.bak"
-    else
-        echo -e "${YELLOW_COLOR}警告：未找到现有 Alist 可执行文件，无法备份。${RES}"
-    fi
-
-
-    # 下载新版本
-    echo -e "${GREEN_COLOR}下载新版本 Alist ...${RES}"
-    if ! download_file "${GH_DOWNLOAD_URL}/alist-linux-musl-$ARCH.tar.gz" "/tmp/alist.tar.gz"; then
-        echo -e "${RED_COLOR}下载失败，更新终止！${RES}"
-        echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        if [ -f "/tmp/alist.bak" ]; then
-            mv "/tmp/alist.bak" "$INSTALL_PATH/alist"
-            systemctl start alist
-            echo -e "${GREEN_COLOR}已恢复到之前的版本并启动服务。${RES}"
-        else
-            echo -e "${YELLOW_COLOR}没有可恢复的旧版本。${RES}"
-        fi
+        echo -e "${RED_COLOR}更新失败！${RES}"
+        mv /tmp/alist.bak $INSTALL_PATH/alist
+        systemctl start alist-backup
+        rm -f /tmp/alist-backup.tar.gz
         exit 1
     fi
-
-    # 解压文件
-    echo -e "${GREEN_COLOR}正在解压新版本文件到 ${INSTALL_PATH}...${RES}"
-    if ! tar zxf /tmp/alist.tar.gz -C "$INSTALL_PATH/"; then
-        echo -e "${RED_COLOR}解压失败，更新终止！${RES}"
-        echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        if [ -f "/tmp/alist.bak" ]; then
-            mv "/tmp/alist.bak" "$INSTALL_PATH/alist"
-            systemctl start alist
-            echo -e "${GREEN_COLOR}已恢复到之前的版本并启动服务。${RES}"
-        else
-            echo -e "${YELLOW_COLOR}没有可恢复的旧版本。${RES}"
-        fi
-        rm -f /tmp/alist.tar.gz
-        exit 1
-    fi
-
-    # 验证更新是否成功
-    if [ -f "$INSTALL_PATH/alist" ]; then
-        echo -e "${GREEN_COLOR}新版本下载并解压成功。${RES}"
-    else
-        echo -e "${RED_COLOR}更新失败：未在目标目录找到新的 Alist 可执行文件！${RES}"
-        echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
-        if [ -f "/tmp/alist.bak" ]; then
-            mv "/tmp/alist.bak" "$INSTALL_PATH/alist"
-            systemctl start alist
-            echo -e "${GREEN_COLOR}已恢复到之前的版本并启动服务。${RES}"
-        else
-            echo -e "${YELLOW_COLOR}没有可恢复的旧版本。${RES}"
-        fi
-        rm -f /tmp/alist.tar.gz /tmp/alist.bak
-        exit 1
-    fi
-
-    # 清理临时文件
-    rm -f /tmp/alist.tar.gz /tmp/alist.bak
-    echo -e "${GREEN_COLOR}临时文件已清理。${RES}"
-
-    # 重启 Alist 服务
-    echo -e "${GREEN_COLOR}启动 Alist 进程...${RES}\r\n"
-    systemctl restart alist
-
+    rm -f /tmp/alist-backup.tar.gz /tmp/alist.bak
+    echo -e "${GREEN_COLOR}启动 Alist Backup 进程${RES}"
+    systemctl restart alist-backup
     echo -e "${GREEN_COLOR}更新完成！${RES}"
 }
 
 UNINSTALL() {
     if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：未在 $INSTALL_PATH 找到 Alist，可能未安装或安装在其他位置。${RES}\r\n"
-        exit 1
+        handle_error 1 "未在 $INSTALL_PATH 找到 Alist Backup"
     fi
-    
-    echo -e "${RED_COLOR}警告：卸载后将删除本地 Alist 目录 ($INSTALL_PATH)、数据库文件及命令行工具！此操作不可逆！${RES}"
+    echo -e "${RED_COLOR}警告：卸载后将删除本地 Alist Backup 目录、数据库文件及命令行工具！${RES}"
     read -p "是否确认卸载？[Y/n]: " choice
-    
     case "${choice:-y}" in
         [yY]|"")
             echo -e "${GREEN_COLOR}开始卸载...${RES}"
-            
-            echo -e "${GREEN_COLOR}停止 Alist 进程...${RES}"
-            systemctl stop alist || echo -e "${YELLOW_COLOR}警告：Alist 服务可能未运行或停止失败。${RES}"
-            systemctl disable alist || echo -e "${YELLOW_COLOR}警告：Alist 服务可能未启用或禁用失败。${RES}"
-            
-            echo -e "${GREEN_COLOR}删除 Alist 文件目录：$INSTALL_PATH...${RES}"
-            rm -rf "$INSTALL_PATH" || echo -e "${RED_COLOR}错误：删除 Alist 目录失败。${RES}"
-            
-            echo -e "${GREEN_COLOR}删除 systemd 服务文件：/etc/systemd/system/alist.service...${RES}"
-            rm -f /etc/systemd/system/alist.service || echo -e "${RED_COLOR}错误：删除 systemd 服务文件失败。${RES}"
+            systemctl stop alist-backup
+            systemctl disable alist-backup
+            rm -rf $INSTALL_PATH
+            rm -f /etc/systemd/system/alist-backup.service
             systemctl daemon-reload
-            
-            # 删除管理脚本和命令链接
-            echo -e "${GREEN_COLOR}删除命令行工具...${RES}"
             if [ -f "$MANAGER_PATH" ] || [ -L "$COMMAND_LINK" ]; then
                 rm -f "$MANAGER_PATH" "$COMMAND_LINK" || {
                     echo -e "${YELLOW_COLOR}警告：删除命令行工具失败，请手动删除：${RES}"
                     echo -e "${YELLOW_COLOR}1. $MANAGER_PATH${RES}"
                     echo -e "${YELLOW_COLOR}2. $COMMAND_LINK${RES}"
                 }
-            else
-                echo -e "${YELLOW_COLOR}命令行工具未找到或已删除。${RES}"
-            fi
-            
-            echo -e "${GREEN_COLOR}Alist 已完全卸载。${RES}"
+            }
+            echo -e "${GREEN_COLOR}Alist Backup 已完全卸载${RES}"
             ;;
         *)
-            echo -e "${GREEN_COLOR}已取消卸载。${RES}"
+            echo -e "${GREEN_COLOR}已取消卸载${RES}"
             ;;
     esac
 }
 
 RESET_PASSWORD() {
     if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-        exit 1
+        handle_error 1 "系统未安装 Alist Backup，请先安装！"
     fi
-
     echo -e "\n请选择密码重置方式"
     echo -e "${GREEN_COLOR}1、生成随机密码${RES}"
     echo -e "${GREEN_COLOR}2、设置新密码${RES}"
     echo -e "${GREEN_COLOR}0、返回主菜单${RES}"
-    echo
     read -p "请输入选项 [0-2]: " choice
-
-    # 切换到 Alist 目录
-    cd "$INSTALL_PATH" || handle_error 1 "无法进入安装目录 $INSTALL_PATH"
-
+    cd $INSTALL_PATH
     case "$choice" in
         1)
             echo -e "${GREEN_COLOR}正在生成随机密码...${RES}"
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
-            # 确保即使没有显示"username:"也打印，或者优化输出
-            "$INSTALL_PATH/alist" admin random 2>&1 | grep -E "username:|password:" | sed 's/.*username:/账号: /' | sed 's/.*password:/密码: /'
-            # 确保返回主菜单前切换回原目录或退出
-            cd "$CURRENT_DIR" >/dev/null 2>&1 || true # 返回，失败也无所谓
+            ./alist admin random 2>&1 | grep -E "username:|password:" | sed 's/.*username:/账号: /' | sed 's/.*password:/密码: /'
             exit 0
             ;;
         2)
             read -p "请输入新密码: " new_password
             if [ -z "$new_password" ]; then
-                echo -e "${RED_COLOR}错误：密码不能为空${RES}"
-                # 确保返回主菜单前切换回原目录或退出
-                cd "$CURRENT_DIR" >/dev/null 2>&1 || true
-                exit 1
+                handle_error 1 "密码不能为空"
             fi
             echo -e "${GREEN_COLOR}正在设置新密码...${RES}"
             echo -e "\n${GREEN_COLOR}账号信息：${RES}"
-            "$INSTALL_PATH/alist" admin set "$new_password" 2>&1 | grep -E "username:|password:" | sed 's/.*username:/账号: /' | sed 's/.*password:/密码: /'
-            # 确保返回主菜单前切换回原目录或退出
-            cd "$CURRENT_DIR" >/dev/null 2>&1 || true
+            ./alist admin set "$new_password" 2>&1 | grep -E "username:|password:" | sed 's/.*username:/账号: /' | sed 's/.*password:/密码: /'
             exit 0
             ;;
         0)
-            cd "$CURRENT_DIR" >/dev/null 2>&1 || true
             return 0
             ;;
         *)
             echo -e "${RED_COLOR}无效的选项${RES}"
-            cd "$CURRENT_DIR" >/dev/null 2>&1 || true
             exit 1
             ;;
     esac
 }
 
-# 在文件开头添加管理脚本路径配置
-MANAGER_PATH="/usr/local/sbin/alist-manager"   # 管理脚本存放路径
-COMMAND_LINK="/usr/local/bin/alist"            # 命令软链接路径
+MANAGER_PATH="/usr/local/sbin/alist-backup-manager"
+COMMAND_LINK="/usr/local/bin/alist-backup"
 
-# 修改 INSTALL_CLI() 函数
 INSTALL_CLI() {
-    # 检查是否有 root 权限
     if [ "$(id -u)" != "0" ]; then
         echo -e "${RED_COLOR}错误：安装命令行工具需要 root 权限${RES}"
         return 1
     fi
-
-    # 获取当前脚本信息（不显示调试信息）
     SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
     SCRIPT_NAME=$(basename "$0")
     SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_NAME"
-
-    # 验证脚本文件是否存在
     if [ ! -f "$SCRIPT_PATH" ]; then
-        echo -e "${RED_COLOR}错误：找不到源脚本文件 ${SCRIPT_PATH}${RES}"
+        echo -e "${RED_COLOR}错误：找不到源脚本文件${RES}"
         return 1
     fi
-    
-    # 创建管理脚本目录
     mkdir -p "$(dirname "$MANAGER_PATH")" || {
         echo -e "${RED_COLOR}错误：无法创建目录 $(dirname "$MANAGER_PATH")${RES}"
         return 1
     }
-    
-    # 复制脚本到管理目录
-    cp -f "$SCRIPT_PATH" "$MANAGER_PATH" || { # 使用-f强制覆盖
-        echo -e "${RED_COLOR}错误：无法复制管理脚本到 $MANAGER_PATH${RES}"
+    cp "$SCRIPT_PATH" "$MANAGER_PATH" || {
+        echo -e "${RED_COLOR}错误：无法复制管理脚本${RES}"
         return 1
     }
-    
-    # 设置权限
     chmod 755 "$MANAGER_PATH" || {
-        echo -e "${RED_COLOR}错误：设置管理脚本权限失败${RES}"
+        echo -e "${RED_COLOR}错误：设置权限失败${RES}"
         rm -f "$MANAGER_PATH"
         return 1
     }
-    
-    # 确保目录权限正确 (一般不需要对系统目录手动设置，但为了健壮性保留)
     chmod 755 "$(dirname "$MANAGER_PATH")" || {
-        echo -e "${YELLOW_COLOR}警告：设置管理脚本目录权限失败，可能需要手动检查。${RES}"
+        echo -e "${YELLOW_COLOR}警告：设置目录权限失败${RES}"
     }
-    
-    # 创建命令软链接目录
     mkdir -p "$(dirname "$COMMAND_LINK")" || {
         echo -e "${RED_COLOR}错误：无法创建目录 $(dirname "$COMMAND_LINK")${RES}"
-        rm -f "$MANAGER_PATH"
         return 1
     }
-    
-    # 创建命令软链接
     ln -sf "$MANAGER_PATH" "$COMMAND_LINK" || {
         echo -e "${RED_COLOR}错误：创建命令链接失败${RES}"
         rm -f "$MANAGER_PATH"
         return 1
     }
-    
     echo -e "${GREEN_COLOR}命令行工具安装成功！${RES}"
     echo -e "\n现在你可以使用以下命令："
-    echo -e "1. ${GREEN_COLOR}alist${RES}      - 快捷命令 (推荐)"
-    echo -e "2. ${GREEN_COLOR}alist-manager${RES}  - 完整命令"
+    echo -e "1. ${GREEN_COLOR}alist-backup${RES}          - 快捷命令"
+    echo -e "2. ${GREEN_COLOR}alist-backup-manager${RES}  - 完整命令"
     return 0
 }
 
 SHOW_MENU() {
-  # 获取实际安装路径
-  INSTALL_PATH=$(GET_INSTALLED_PATH)
-
-  echo -e "\n欢迎使用 Alist 管理脚本\n"
-  echo -e "${GREEN_COLOR}1、安装 Alist${RES}"
-  echo -e "${GREEN_COLOR}2、更新 Alist${RES}"
-  echo -e "${GREEN_COLOR}3、卸载 Alist${RES}"
-  echo -e "${GREEN_COLOR}-------------------${RES}"
-  echo -e "${GREEN_COLOR}4、查看状态${RES}"
-  echo -e "${GREEN_COLOR}5、重置密码${RES}"
-  echo -e "${GREEN_COLOR}-------------------${RES}"
-  echo -e "${GREEN_COLOR}6、启动 Alist${RES}"
-  echo -e "${GREEN_COLOR}7、停止 Alist${RES}"
-  echo -e "${GREEN_COLOR}8、重启 Alist${RES}"
-  echo -e "${GREEN_COLOR}-------------------${RES}"
-  echo -e "${GREEN_COLOR}0、退出脚本${RES}"
-  echo
-  read -p "请输入选项 [0-8]: " choice
-  
-  case "$choice" in
-    1)
-      # 安装时重置为默认路径
-      INSTALL_PATH='/opt/alist'
-      CHECK
-      INSTALL
-      INIT
-      SUCCESS
-      return 0
-      ;;
-    2)
-      UPDATE
-      exit 0
-      ;;
-    3)
-      UNINSTALL
-      exit 0
-      ;;
-    4)
-      if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-        return 1
-      fi
-      # 检查服务状态
-      echo -e "${GREEN_COLOR}正在检查 Alist 服务状态...${RES}"
-      if systemctl is-active alist >/dev/null 2>&1; then
-        echo -e "${GREEN_COLOR}Alist 当前状态为：运行中${RES}"
-      else
-        echo -e "${RED_COLOR}Alist 当前状态为：停止${RES}"
-      fi
-      systemctl status alist --no-pager # 显示详细状态
-      return 0
-      ;;
-    5)
-      RESET_PASSWORD
-      return 0
-      ;;
-    6)
-      if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-        return 1
-      fi
-      systemctl start alist
-      echo -e "${GREEN_COLOR}Alist 已启动。${RES}"
-      return 0
-      ;;
-    7)
-      if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-        return 1
-      fi
-      systemctl stop alist
-      echo -e "${GREEN_COLOR}Alist 已停止。${RES}"
-      return 0
-      ;;
-    8)
-      if [ ! -f "$INSTALL_PATH/alist" ]; then
-        echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-        return 1
-      fi
-      systemctl restart alist
-      echo -e "${GREEN_COLOR}Alist 已重启。${RES}"
-      return 0
-      ;;
-    0)
-      exit 0
-      ;;
-    *)
-      echo -e "${RED_COLOR}无效的选项，请重新输入。${RES}"
-      return 1
-      ;;
-  esac
+    INSTALL_PATH=$(GET_INSTALLED_PATH)
+    echo -e "\n欢迎使用 Alist Backup 管理脚本\n"
+    echo -e "${GREEN_COLOR}1、安装 Alist Backup${RES}"
+    echo -e "${GREEN_COLOR}2、更新 Alist Backup${RES}"
+    echo -e "${GREEN_COLOR}3、卸载 Alist Backup${RES}"
+    echo -e "${GREEN_COLOR}-------------------${RES}"
+    echo -e "${GREEN_COLOR}4、查看状态${RES}"
+    echo -e "${GREEN_COLOR}5、重置密码${RES}"
+    echo -e "${GREEN_COLOR}-------------------${RES}"
+    echo -e "${GREEN_COLOR}6、启动 Alist Backup${RES}"
+    echo -e "${GREEN_COLOR}7、停止 Alist Backup${RES}"
+    echo -e "${GREEN_COLOR}8、重启 Alist Backup${RES}"
+    echo -e "${GREEN_COLOR}-------------------${RES}"
+    echo -e "${GREEN_COLOR}0、退出脚本${RES}"
+    read -p "请输入选项 [0-8]: " choice
+    case "$choice" in
+        1)
+            INSTALL_PATH='/opt/alist-backup'
+            CHECK
+            INSTALL
+            INIT
+            SUCCESS
+            return 0
+            ;;
+        2)
+            UPDATE
+            exit 0
+            ;;
+        3)
+            UNINSTALL
+            exit 0
+            ;;
+        4)
+            if [ ! -f "$INSTALL_PATH/alist" ]; then
+                echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist Backup，请先安装！${RES}\r\n"
+                return 1
+            fi
+            if systemctl is-active alist-backup >/dev/null 2>&1; then
+                echo -e "${GREEN_COLOR}Alist Backup 当前状态为：运行中${RES}"
+            else
+                echo -e "${RED_COLOR}Alist Backup 当前状态为：停止${RES}"
+            fi
+            return 0
+            ;;
+        5)
+            RESET_PASSWORD
+            return 0
+            ;;
+        6)
+            if [ ! -f "$INSTALL_PATH/alist" ]; then
+                echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist Backup，请先安装！${RES}\r\n"
+                return 1
+            fi
+            systemctl start alist-backup
+            echo -e "${GREEN_COLOR}Alist Backup 已启动${RES}"
+            return 0
+            ;;
+        7)
+            if [ ! -f "$INSTALL_PATH/alist" ]; then
+                echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist Backup，请先安装！${RES}\r\n"
+                return 1
+            fi
+            systemctl stop alist-backup
+            echo -e "${GREEN_COLOR}Alist Backup 已停止${RES}"
+            return 0
+            ;;
+        8)
+            if [ ! -f "$INSTALL_PATH/alist" ]; then
+                echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist Backup，请先安装！${RES}\r\n"
+                return 1
+            fi
+            systemctl restart alist-backup
+            echo -e "${GREEN_COLOR}Alist Backup 已重启${RES}"
+            return 0
+            ;;
+        0)
+            exit 0
+            ;;
+        *)
+            echo -e "${RED_COLOR}无效的选项${RES}"
+            return 1
+            ;;
+    esac
 }
 
-# 修改主程序逻辑
 if [ $# -eq 0 ]; then
-  # 如果没有参数，显示菜单并循环
-  while true; do
-    SHOW_MENU
-    echo
-    # 等待一会儿让用户看到执行结果
-    if [ $? -eq 0 ]; then
-      sleep 3  # 成功时等待3秒
-    else
-      sleep 5  # 失败时等待5秒
-    fi
-    clear  # 然后再清屏显示菜单
-  done
+    while true; do
+        SHOW_MENU
+        echo
+        if [ $? -eq 0 ]; then
+            sleep 3
+        else
+            sleep 5
+        fi
+        clear
+    done
 elif [ "$1" = "install" ]; then
-  CHECK
-  INSTALL
-  INIT
-  SUCCESS
+    CHECK
+    INSTALL
+    INIT
+    SUCCESS
 elif [ "$1" = "update" ]; then
-  if [ $# -gt 1 ]; then
-    echo -e "${RED_COLOR}错误：'update' 命令不需要指定路径。${RES}"
-    echo -e "正确用法: ${GREEN_COLOR}$0 update${RES}"
-    exit 1
-  fi
-  UPDATE
+    if [ $# -gt 1 ]; then
+        echo -e "${RED_COLOR}错误：update 命令不需要指定路径${RES}"
+        echo -e "正确用法: $0 update"
+        exit 1
+    fi
+    UPDATE
 elif [ "$1" = "uninstall" ]; then
-  if [ $# -gt 1 ]; then
-    echo -e "${RED_COLOR}错误：'uninstall' 命令不需要指定路径。${RES}"
-    echo -e "正确用法: ${GREEN_COLOR}$0 uninstall${RES}"
-    exit 1
-  fi
-  UNINSTALL
-elif [ "$1" = "status" ]; then # 添加直接查看状态的命令
-    INSTALL_PATH=$(GET_INSTALLED_PATH) # 确保获取到安装路径
-    if [ ! -f "$INSTALL_PATH/alist" ]; then
-      echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-      exit 1
+    if [ $# -gt 1 ]; then
+        echo -e "${RED_COLOR}错误：uninstall 命令不需要指定路径${RES}"
+        echo -e "正确用法: $0 uninstall"
+        exit 1
     fi
-    echo -e "${GREEN_COLOR}正在检查 Alist 服务状态...${RES}"
-    systemctl status alist --no-pager
-elif [ "$1" = "start" ]; then
-    INSTALL_PATH=$(GET_INSTALLED_PATH)
-    if [ ! -f "$INSTALL_PATH/alist" ]; then
-      echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-      exit 1
-    fi
-    systemctl start alist
-    echo -e "${GREEN_COLOR}Alist 已启动。${RES}"
-elif [ "$1" = "stop" ]; then
-    INSTALL_PATH=$(GET_INSTALLED_PATH)
-    if [ ! -f "$INSTALL_PATH/alist" ]; then
-      echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-      exit 1
-    fi
-    systemctl stop alist
-    echo -e "${GREEN_COLOR}Alist 已停止。${RES}"
-elif [ "$1" = "restart" ]; then
-    INSTALL_PATH=$(GET_INSTALLED_PATH)
-    if [ ! -f "$INSTALL_PATH/alist" ]; then
-      echo -e "\r\n${RED_COLOR}错误：系统未安装 Alist，请先安装！${RES}\r\n"
-      exit 1
-    fi
-    systemctl restart alist
-    echo -e "${GREEN_COLOR}Alist 已重启。${RES}"
-elif [ "$1" = "reset_password" ]; then
-    INSTALL_PATH=$(GET_INSTALLED_PATH)
-    RESET_PASSWORD
+    UNINSTALL
 else
-  echo -e "${RED_COLOR}错误的命令或参数。${RES}"
-  echo -e "用法示例:"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL})${RES} # 显示交互菜单"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL}) install [安装路径]${RES} # 安装 Alist"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL}) update${RES} # 更新 Alist"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL}) uninstall${RES} # 卸载 Alist"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL}) status${RES} # 查看 Alist 状态"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL}) start/stop/restart${RES} # 启动/停止/重启 Alist"
-  echo -e "  ${GREEN_COLOR}sudo bash <(curl -fsSL ${SCRIPT_URL}) reset_password${RES} # 重置 Alist 密码"
-  exit 1
+    echo -e "${RED_COLOR}错误的命令${RES}"
+    echo -e "用法: $0 install [安装路径]    # 安装 Alist Backup"
+    echo -e "     $0 update              # 更新 Alist Backup"
+    echo -e "     $0 uninstall          # 卸载 Alist Backup"
+    echo -e "     $0                    # 显示交互菜单"
 fi
