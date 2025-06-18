@@ -37,12 +37,9 @@ fi
 
 # 配置部分
 #######################
-# 自定义下载配置
-# 注意：此脚本已修改为从您的备份仓库下载指定文件
-# 您提供的下载链接是针对 arm64 架构的，如果您在 x86_64 机器上运行此脚本，
-# 可能会尝试下载 arm64 包，导致安装失败。
-# 请确保您的下载包与目标机器架构匹配，或提供多架构的下载链接。
-CUSTOM_ALIST_DOWNLOAD_URL="https://github.com/guihuatu2022/alist-backup/releases/download/alist-backup/alist-linux-arm64.tar.gz"
+# GitHub 相关配置
+#GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/alist-org/alist/releases/latest/download"
+GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/guihuatu2022/alist-backup/releases/latest/download"
 #######################
 
 # 颜色配置
@@ -98,14 +95,14 @@ fi
 
 clear
 
-# 获取平台架构 (此脚本中，架构检测不再用于选择下载文件，因为下载链接已固定)
+# 获取平台架构
 if command -v arch >/dev/null 2>&1; then
   platform=$(arch)
 else
   platform=$(uname -m)
 fi
 
-ARCH="UNKNOWN" # 实际不再用于选择下载文件，仅用于提示
+ARCH="UNKNOWN"
 
 if [ "$platform" = "x86_64" ]; then
   ARCH=amd64
@@ -121,9 +118,8 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
   fi
 elif [ "$ARCH" == "UNKNOWN" ]; then
-  echo -e "\r\n${YELLOW_COLOR}警告：当前平台 ($platform) 非 x86_64 或 arm64。${RES}\r\n"
-  echo -e "${YELLOW_COLOR}请注意，此脚本已硬编码下载 arm64 架构的 Alist 包，可能不兼容当前平台。${RES}\r\n"
-  # 不退出，但给出警告，因为用户明确指定了下载包
+  echo -e "\r\n${RED_COLOR}出错了${RES}，一键安装目前仅支持 x86_64 和 arm64 平台。\r\n"
+  exit 1
 elif ! command -v systemctl >/dev/null 2>&1; then
   echo -e "\r\n${RED_COLOR}出错了${RES}，无法确定你当前的 Linux 发行版。\r\n建议手动安装。\r\n"
   exit 1
@@ -171,9 +167,8 @@ download_file() {
     local wait_time=5
 
     while [ $retry_count -lt $max_retries ]; do
-        echo -e "${GREEN_COLOR}正在尝试下载: $url ${RES}"
         if curl -L --connect-timeout 10 --retry 3 --retry-delay 3 "$url" -o "$output"; then
-            if [ -f "$output" ] && [ -s "$output" ]; then   # 检查文件是否存在且不为空
+            if [ -f "$output" ] && [ -s "$output" ]; then  # 检查文件是否存在且不为空
                 return 0
             fi
         fi
@@ -182,7 +177,7 @@ download_file() {
         if [ $retry_count -lt $max_retries ]; then
             echo -e "${YELLOW_COLOR}下载失败，${wait_time} 秒后进行第 $((retry_count + 1)) 次重试...${RES}"
             sleep $wait_time
-            wait_time=$((wait_time + 5))    # 每次重试增加等待时间
+            wait_time=$((wait_time + 5))  # 每次重试增加等待时间
         else
             echo -e "${RED_COLOR}下载失败，已重试 $max_retries 次${RES}"
             return 1
@@ -195,29 +190,35 @@ INSTALL() {
   # 保存当前目录
   CURRENT_DIR=$(pwd)
   
-    # 询问是否使用代理 (此部分在自定义下载链接后作用不大，但保留逻辑)
+    # 询问是否使用代理
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
     read -p "请输入代理地址或直接按回车继续: " proxy_input
 
-  # 如果用户输入了代理地址，则使用代理拼接下载链接 (此逻辑在自定义下载后可能不会触发)
+  # 如果用户输入了代理地址，则使用代理拼接下载链接
   if [ -n "$proxy_input" ]; then
-    echo -e "${YELLOW_COLOR}注意：已设置自定义下载链接，代理设置可能无效。${RES}"
+    GH_PROXY="$proxy_input"
+    GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/guihuatu2022/alist-backup/releases/latest/download"
+    echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
+  else
+    # 如果不需要代理，直接使用默认链接
+    GH_DOWNLOAD_URL="https://github.com/guihuatu2022/alist-backup/releases/latest/download"
+    echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
   fi
 
-  # 下载 Alist 程序 - 使用您自定义的下载链接
+  # 下载 Alist 程序
   echo -e "\r\n${GREEN_COLOR}下载 Alist ...${RES}"
   
-  # 使用您自定义的下载地址
-  if ! download_file "${CUSTOM_ALIST_DOWNLOAD_URL}" "/tmp/alist.tar.gz"; then
-    echo -e "${RED_COLOR}下载失败！请检查您的自定义下载链接或网络连接。${RES}"
+  # 使用拼接后的 GitHub 下载地址
+  if ! download_file "${GH_DOWNLOAD_URL}/alist-linux-musl-$ARCH.tar.gz" "/tmp/alist.tar.gz"; then
+    echo -e "${RED_COLOR}下载失败！${RES}"
     exit 1
   fi
 
   # 解压文件
   if ! tar zxf /tmp/alist.tar.gz -C $INSTALL_PATH/; then
-    echo -e "${RED_COLOR}解压失败！请确保下载的包是有效的 tar.gz 文件。${RES}"
+    echo -e "${RED_COLOR}解压失败！${RES}"
     rm -f /tmp/alist.tar.gz
     exit 1
   fi
@@ -233,7 +234,7 @@ INSTALL() {
     # 切回原目录
     cd "$CURRENT_DIR"
   else
-    echo -e "${RED_COLOR}安装失败！未找到 Alist 可执行文件。请检查下载包内容。${RES}"
+    echo -e "${RED_COLOR}安装失败！${RES}"
     rm -rf $INSTALL_PATH
     mkdir -p $INSTALL_PATH
     exit 1
@@ -272,7 +273,7 @@ EOF
 }
 
 SUCCESS() {
-  clear   # 只在开始时清屏一次
+  clear  # 只在开始时清屏一次
   print_line() {
     local text="$1"
     local width=51
@@ -310,7 +311,7 @@ SUCCESS() {
   
   echo -e "\n${YELLOW_COLOR}温馨提示：如果端口无法访问，请检查服务器安全组、防火墙和服务状态${RES}"
   echo
-  exit 0    # 直接退出，不再返回菜单
+  exit 0  # 直接退出，不再返回菜单
 }
 
 UPDATE() {
@@ -321,15 +322,21 @@ UPDATE() {
 
     echo -e "${GREEN_COLOR}开始更新 Alist ...${RES}"
 
-    # 询问是否使用代理 (此部分在自定义下载链接后作用不大，但保留逻辑)
+    # 询问是否使用代理
     echo -e "${GREEN_COLOR}是否使用 GitHub 代理？（默认无代理）${RES}"
     echo -e "${GREEN_COLOR}代理地址必须为 https 开头，斜杠 / 结尾 ${RES}"
     echo -e "${GREEN_COLOR}例如：https://ghproxy.com/ ${RES}"
     read -p "请输入代理地址或直接按回车继续: " proxy_input
 
-    # 如果用户输入了代理地址，则使用代理拼接下载链接 (此逻辑在自定义下载后可能不会触发)
+    # 如果用户输入了代理地址，则使用代理拼接下载链接
     if [ -n "$proxy_input" ]; then
-        echo -e "${YELLOW_COLOR}注意：已设置自定义下载链接，代理设置可能无效。${RES}"
+        GH_PROXY="$proxy_input"
+        GH_DOWNLOAD_URL="${GH_PROXY}https://github.com/guihuatu2022/alist-backup/releases/latest/download"
+        echo -e "${GREEN_COLOR}已使用代理地址: $GH_PROXY${RES}"
+    else
+        # 如果不需要代理，直接使用默认链接
+        GH_DOWNLOAD_URL="https://github.com/guihuatu2022/alist-backup/releases/latest/download"
+        echo -e "${GREEN_COLOR}使用默认 GitHub 地址进行下载${RES}"
     fi
 
     # 停止 Alist 服务
@@ -339,10 +346,10 @@ UPDATE() {
     # 备份二件
     cp $INSTALL_PATH/alist /tmp/alist.bak
 
-    # 下载新版本 - 使用您自定义的下载链接
+    # 下载新版本
     echo -e "${GREEN_COLOR}下载 Alist ...${RES}"
-    if ! download_file "${CUSTOM_ALIST_DOWNLOAD_URL}" "/tmp/alist.tar.gz"; then
-        echo -e "${RED_COLOR}下载失败，更新终止！请检查您的自定义下载链接或网络连接。${RES}"
+    if ! download_file "${GH_DOWNLOAD_URL}/alist-linux-musl-$ARCH.tar.gz" "/tmp/alist.tar.gz"; then
+        echo -e "${RED_COLOR}下载失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/alist.bak $INSTALL_PATH/alist
         systemctl start alist
@@ -351,7 +358,7 @@ UPDATE() {
 
     # 解压文件
     if ! tar zxf /tmp/alist.tar.gz -C $INSTALL_PATH/; then
-        echo -e "${RED_COLOR}解压失败，更新终止！请确保下载的包是有效的 tar.gz 文件。${RES}"
+        echo -e "${RED_COLOR}解压失败，更新终止${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/alist.bak $INSTALL_PATH/alist
         systemctl start alist
@@ -363,7 +370,7 @@ UPDATE() {
     if [ -f $INSTALL_PATH/alist ]; then
         echo -e "${GREEN_COLOR}下载成功，正在更新${RES}"
     else
-        echo -e "${RED_COLOR}更新失败！未找到 Alist 可执行文件。请检查下载包内容。${RES}"
+        echo -e "${RED_COLOR}更新失败！${RES}"
         echo -e "${GREEN_COLOR}正在恢复之前的版本...${RES}"
         mv /tmp/alist.bak $INSTALL_PATH/alist
         systemctl start alist
@@ -466,8 +473,8 @@ RESET_PASSWORD() {
 }
 
 # 在文件开头添加管理脚本路径配置
-MANAGER_PATH="/usr/local/sbin/alist-manager"   # 管理脚本存放路径
-COMMAND_LINK="/usr/local/bin/alist"            # 命令软链接路径
+MANAGER_PATH="/usr/local/sbin/alist-manager"  # 管理脚本存放路径
+COMMAND_LINK="/usr/local/bin/alist"          # 命令软链接路径
 
 # 修改 INSTALL_CLI() 函数
 INSTALL_CLI() {
@@ -531,7 +538,7 @@ INSTALL_CLI() {
     
     echo -e "${GREEN_COLOR}命令行工具安装成功！${RES}"
     echo -e "\n现在你可以使用以下命令："
-    echo -e "1. ${GREEN_COLOR}alist${RES}        - 快捷命令"
+    echo -e "1. ${GREEN_COLOR}alist${RES}          - 快捷命令"
     echo -e "2. ${GREEN_COLOR}alist-manager${RES}  - 完整命令"
     return 0
 }
@@ -635,11 +642,11 @@ if [ $# -eq 0 ]; then
     echo
     # 等待一会儿让用户看到执行结果
     if [ $? -eq 0 ]; then
-      sleep 3   # 成功时等待3秒
+      sleep 3  # 成功时等待3秒
     else
-      sleep 5   # 失败时等待5秒
+      sleep 5  # 失败时等待5秒
     fi
-    clear   # 然后再清屏显示菜单
+    clear  # 然后再清屏显示菜单
   done
 elif [ "$1" = "install" ]; then
   CHECK
@@ -662,8 +669,8 @@ elif [ "$1" = "uninstall" ]; then
   UNINSTALL
 else
   echo -e "${RED_COLOR}错误的命令${RES}"
-  echo -e "用法: $0 install [安装路径]     # 安装 Alist"
-  echo -e "     $0 update            # 更新 Alist"
-  echo -e "     $0 uninstall         # 卸载 Alist"
-  echo -e "     $0                   # 显示交互菜单"
+  echo -e "用法: $0 install [安装路径]    # 安装 Alist"
+  echo -e "     $0 update              # 更新 Alist"
+  echo -e "     $0 uninstall          # 卸载 Alist"
+  echo -e "     $0                    # 显示交互菜单"
 fi
