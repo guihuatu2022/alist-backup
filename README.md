@@ -1,8 +1,13 @@
 【1】关于安装，仅保存了3.45版本的Linux和Window
 Linux安装脚本如下
-
+一键安装默认路径/opt/alist
 ```
 curl -fsSL "https://raw.githubusercontent.com/guihuatu2022/alist-backup/refs/heads/main/v3.sh" -o v3.sh && bash v3.sh
+```
+
+一键安装自定义路径
+```
+curl -fsSL "https://raw.githubusercontent.com/guihuatu2022/alist-backup/refs/heads/main/v3.sh" -o v3.sh && bash v3.sh install /root
 ```
 
 【2】关于添加Onedrive的方法
