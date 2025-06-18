@@ -2,7 +2,7 @@
 Linux安装脚本如下
 
 ```
-curl -fsSL https://raw.githubusercontent.com/guihuatu2022/alist-backup/refs/heads/main/v3.sh | bash -s install
+curl -fsSL "https://raw.githubusercontent.com/guihuatu2022/alist-backup/refs/heads/main/v3.sh" -o v3.sh && bash v3.sh
 ```
 
 【2】关于添加Onedrive的方法
