@@ -1,4 +1,4 @@
-【1】关于安装，仅保存了3.45版本的Linux和Window
+【1】关于安装，仅保存了3.40版本的Linux和Window
 Linux安装脚本如下
 一键安装默认路径/opt/alist
 ```
